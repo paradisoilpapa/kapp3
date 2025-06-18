@@ -440,87 +440,62 @@ if len(b_list) != len(df):
     st.stop()
 df["B回数"] = b_list
 
-# --- 合計スコアで◎決定（スコア差0.5未満は適性スコア） ---
-top2 = df.sort_values(by="合計スコア", ascending=False).head(2)
-score_diff = top2.iloc[0]["合計スコア"] - top2.iloc[1]["合計スコア"]
-
-if score_diff >= 0.5:
-    anchor_row = top2.iloc[0]
-    anchor_reason = "スコア差0.5以上：スコア1位"
-else:
-    df["構成適性"] = (
-        df["着順補正"] * 0.8 +
-        df["SB印補正"] * 1.2 +
-        df["ライン補正"] * 0.4 +
-        df["グループ補正"] * 0.2
-    )
-    anchor_row = df.sort_values(by="構成適性", ascending=False).iloc[0]
-    anchor_reason = "スコア差0.5未満：構成適性"
-
+# --- スコア1位とその0.5差以内の選手を構成評価で再評価 ---
+df_sorted = df.sort_values(by="合計スコア", ascending=False)
+top_score = df_sorted.iloc[0]["合計スコア"]
+df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
+df_top_range["構成評価"] = (
+    df_top_range["着順補正"] * 0.8 +
+    df_top_range["SB印補正"] * 1.2 +
+    df_top_range["ライン補正"] * 0.4 +
+    df_top_range["グループ補正"] * 0.2
+)
+anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0]
 anchor_index = int(anchor_row["車番"])
 anchor_line_value = anchor_row["グループ補正"]
 
-# --- ◎以外を抽出し構成適性を算出 ---
+# --- ◎以外を抽出し構成評価算出 ---
 others = df[df["車番"] != anchor_index].copy()
-others["構成適性"] = (
+others["構成評価"] = (
     others["着順補正"] * 0.8 +
     others["SB印補正"] * 1.2 +
     others["ライン補正"] * 0.4 +
     others["グループ補正"] * 0.2
 )
 
-# --- 同グループ補正内の構成適性上位から1車選出 ---
-same_group = others[others["グループ補正"] == anchor_line_value]
-same_group = same_group[same_group["車番"] != anchor_index]
-line_pick = same_group.sort_values(by="構成適性", ascending=False).head(1)
-
-# --- 展開補正の算出（風＋バンク＋着順） ---
-others_excluded = others[~others["車番"].isin([anchor_index])]
-if not line_pick.empty:
-    others_excluded = others_excluded[~others_excluded["車番"].isin(line_pick["車番"])]
-
-others_excluded["展開補正"] = (
-    others_excluded["着順補正"] +
-    others_excluded["風補正"] +
-    others_excluded["バンク補正"]
-)
-
-# --- B回数2以下・3以上でグループ分け ---
-low_group = others_excluded[others_excluded["B回数"] <= 2]
-high_group = others_excluded[others_excluded["B回数"] >= 3]
-
-low_mean = low_group["展開補正"].mean() if not low_group.empty else -1
-high_mean = high_group["展開補正"].mean() if not high_group.empty else -1
-
-if high_mean > low_mean:
-    final_pick_group = high_group
-else:
-    final_pick_group = low_group
-
-final_pick = final_pick_group.sort_values(by="展開補正", ascending=False).head(1)
-
-# --- 最終構成車番リスト作成 ---
 final_candidates = [anchor_index]
-if not line_pick.empty:
-    final_candidates.append(int(line_pick.iloc[0]["車番"]))
-if not final_pick.empty:
-    final_candidates.append(int(final_pick.iloc[0]["車番"]))
 
-# --- 残り1枠を構成適性で埋める（未使用者から） ---
-used_cars = set(final_candidates)
-remaining_df = df[~df["車番"].isin(used_cars)].copy()
-remaining_df["構成適性"] = (
-    remaining_df["着順補正"] * 0.8 +
-    remaining_df["SB印補正"] * 1.2 +
-    remaining_df["ライン補正"] * 0.4 +
-    remaining_df["グループ補正"] * 0.2
-)
+if anchor_line_value == 0.0:
+    # 単騎起点モード
+    low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
+    high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
+    if not low_B.empty:
+        final_candidates.append(int(low_B.iloc[0]["車番"]))
+    if not high_B.empty:
+        final_candidates.append(int(high_B.iloc[0]["車番"]))
+    used_cars = set(final_candidates)
+    rest = others[~others["車番"].isin(used_cars)].sort_values(by="構成評価", ascending=False)
+    if not rest.empty and len(final_candidates) < 4:
+        final_candidates.append(int(rest.iloc[0]["車番"]))
+else:
+    # ライン起点モード
+    same_line = others[others["グループ補正"] == anchor_line_value].sort_values(by="構成評価", ascending=False)
+    if not same_line.empty:
+        final_candidates.append(int(same_line.iloc[0]["車番"]))
+        others = others[~others["車番"].isin([same_line.iloc[0]["車番"]])]
 
-if len(final_candidates) < 4 and not remaining_df.empty:
-    last_pick = remaining_df.sort_values(by="構成適性", ascending=False).head(1)
-    final_candidates.append(int(last_pick.iloc[0]["車番"]))
+    low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
+    if not low_B.empty:
+        final_candidates.append(int(low_B.iloc[0]["車番"]))
+        others = others[~others["車番"].isin([low_B.iloc[0]["車番"]])]
 
-# --- 出力 ---
+    high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
+    if not high_B.empty and len(final_candidates) < 4:
+        final_candidates.append(int(high_B.iloc[0]["車番"]))
+
+# --- 最終出力（4車以内に制限） ---
+final_candidates = final_candidates[:4]
+
 st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"◎（起点）：`{anchor_index}`（{anchor_reason}）")
+st.markdown(f"◎（起点）：`{anchor_index}`")
 st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
