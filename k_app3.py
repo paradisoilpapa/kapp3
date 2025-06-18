@@ -523,11 +523,11 @@ if len(main_line_cars) <= 3:
             )
             gyofu_line_rank.append((k, sub_df))
 
-        if gyofu_line_rank:
-            gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
-            best_gyofu_df = gyofu_line_rank[0][1]  # 上位1ラインのみ使用
+        gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
 
-            for _, row in best_gyofu_df.sort_values(by="構成評価", ascending=False).iterrows():
+        if gyofu_line_rank:
+            top_gyofu_key, top_gyofu_df = gyofu_line_rank[0]
+            for _, row in top_gyofu_df.sort_values(by="構成評価", ascending=False).iterrows():
                 if len(final_candidates) >= 4:
                     break
                 picked = int(row["車番"])
