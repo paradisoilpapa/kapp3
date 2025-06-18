@@ -440,8 +440,8 @@ if len(b_list) != len(df):
     st.stop()
 df["B回数"] = b_list
 
-# --- スコア1位とその0.5差以内の選手を構成評価で再評価 ---
-df_sorted = df.sort_values(by="合計スコア", ascending=False)
+# --- 合計スコアで並び替え ---
+df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
 top_score = df_sorted.iloc[0]["合計スコア"]
 df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
 df_top_range["構成評価"] = (
@@ -454,51 +454,60 @@ anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0
 anchor_index = int(anchor_row["車番"])
 anchor_line_value = anchor_row["グループ補正"]
 
-# --- ◎以外を抽出し構成評価算出 ---
-others = df[df["車番"] != anchor_index].copy()
-others["構成評価"] = (
-    others["着順補正"] * 0.8 +
-    others["SB印補正"] * 1.2 +
-    others["ライン補正"] * 0.4 +
-    others["グループ補正"] * 0.2
+# --- ライン定義 ---
+line_groups = df.groupby("グループ補正")
+main_line = df[df["車番"] == anchor_index]["グループ補正"].values[0]
+
+# --- スコア2位の選手のラインを敵対ラインと定義 ---
+enemy_line_value = df_sorted.iloc[1]["グループ補正"]
+
+# --- 漁夫の利ライン抽出（メインラインでも敵対ラインでもない） ---
+other_lines = [grp for grp in df["グループ補正"].unique() if grp not in [main_line, enemy_line_value]]
+
+gyofu_df = df[df["グループ補正"].isin(other_lines)].copy()
+gyofu_df["構成評価"] = (
+    gyofu_df["着順補正"] * 0.8 +
+    gyofu_df["SB印補正"] * 1.2 +
+    gyofu_df["ライン補正"] * 0.4 +
+    gyofu_df["グループ補正"] * 0.2
 )
 
+# --- 漁夫の利ラインが5車以上なら最低スコアを除外 ---
+if len(gyofu_df) > 4:
+    gyofu_df = gyofu_df.sort_values(by="構成評価", ascending=False).head(4)
+
+gyofu_df = gyofu_df.sort_values(by="構成評価", ascending=False)
 final_candidates = [anchor_index]
-main_line = [anchor_index]
-gyofu_line = []
+selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 
-if anchor_line_value == 0.0:
-    # 単騎起点モード
-    low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
-    high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
-    combined = pd.concat([low_B, high_B]).sort_values(by="構成評価", ascending=False)
-    for _, row in combined.iterrows():
-        car = int(row["車番"])
-        if car not in final_candidates and len(final_candidates) < 4:
-            final_candidates.append(car)
-            gyofu_line.append(car)
-else:
-    # ライン起点モード
-    same_line = others[others["グループ補正"] == anchor_line_value].sort_values(by="構成評価", ascending=False)
-    if not same_line.empty:
-        picked = int(same_line.iloc[0]["車番"])
-        final_candidates.append(picked)
-        main_line.append(picked)
-        others = others[~others["車番"].isin([picked])]
+# --- メインラインから補完（◎以外） ---
+main_df = df[(df["グループ補正"] == main_line) & (df["車番"] != anchor_index)]
+main_df["構成評価"] = (
+    main_df["着順補正"] * 0.8 +
+    main_df["SB印補正"] * 1.2 +
+    main_df["ライン補正"] * 0.4 +
+    main_df["グループ補正"] * 0.2
+)
+main_pick = main_df.sort_values(by="構成評価", ascending=False).head(1)
+if not main_pick.empty:
+    picked = int(main_pick.iloc[0]["車番"])
+    final_candidates.append(picked)
+    selection_reason.append(f"メインライン：{picked}")
 
-    for _, row in others.sort_values(by="構成評価", ascending=False).iterrows():
-        car = int(row["車番"])
-        if car not in final_candidates and len(final_candidates) < 4:
-            final_candidates.append(car)
-            gyofu_line.append(car)
+# --- 漁夫の利から2車 ---
+gyofu_df = gyofu_df[~gyofu_df["車番"].isin(final_candidates)]
+for i in range(2):
+    if len(final_candidates) >= 4 or gyofu_df.empty:
+        break
+    picked = int(gyofu_df.iloc[i]["車番"])
+    final_candidates.append(picked)
+    selection_reason.append(f"漁夫の利ライン：{picked}")
 
-# --- 最終出力（4車以内に制限） ---
+# --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
-main_line = [c for c in final_candidates if c in main_line][:2]
-gyofu_line = [c for c in final_candidates if c in gyofu_line][:2]
+selection_reason = selection_reason[:4]
 
-# --- 出力表示 ---
 st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"- メインライン：{', '.join(map(str, main_line))}")
-st.markdown(f"- 漁夫の利ライン：{', '.join(map(str, gyofu_line))}")
+for reason in selection_reason:
+    st.markdown(f"- {reason}")
 st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
