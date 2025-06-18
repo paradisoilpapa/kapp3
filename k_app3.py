@@ -523,6 +523,8 @@ if len(main_line_cars) <= 3:
             )
             gyofu_line_rank.append((k, sub_df))
 
+        gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
+
         for _, sub_df in gyofu_line_rank:
             for _, row in sub_df.sort_values(by="構成評価", ascending=False).iterrows():
                 if len(final_candidates) >= 4:
