@@ -458,29 +458,14 @@ anchor_line_value = anchor_row["グループ補正"]
 main_line = anchor_line_value
 
 # --- 潰しライン定義 ---
-line_values = df["グループ補正"].unique().tolist()
-line_values.remove(main_line)
+score_top3 = df_sorted.iloc[:3].copy()
+group_top2 = score_top3.iloc[1]["グループ補正"]
 
-# スコア上位順にソートして潰しライン候補取得
-rival_df = df[df["グループ補正"].isin(line_values)].copy()
-rival_df["構成評価"] = (
-    rival_df["着順補正"] * 0.8 +
-    rival_df["SB印補正"] * 1.2 +
-    rival_df["ライン補正"] * 0.4 +
-    rival_df["グループ補正"] * 0.2
-)
+# 潰しラインはスコア2位のライン
+tsubushi_line = group_top2
 
-# 潰しライン候補から構成評価2位のラインを除外
-rival_lines_ranked = rival_df.groupby("グループ補正")["構成評価"].mean().sort_values(ascending=False)
-if len(rival_lines_ranked) >= 2:
-    excluded_line = rival_lines_ranked.index[1]  # 2位のライン
-else:
-    excluded_line = None
-
-# 漁夫の利ラインを決定（main + 潰しライン2位以外）
-excluded_lines = [main_line]
-if excluded_line is not None:
-    excluded_lines.append(excluded_line)
+# 漁夫の利ラインを決定（main + 潰しライン以外）
+excluded_lines = [main_line, tsubushi_line]
 gyofu_df = df[~df["グループ補正"].isin(excluded_lines)].copy()
 
 # ◎の構成評価理由
@@ -500,23 +485,21 @@ if not main_df.empty:
     final_candidates.append(picked)
     selection_reason.append(f"メインライン：{picked}")
 
-# --- 漁夫の利から最大2車（ライン単位でグループ化） ---
+# --- 漁夫の利から最大2車（構成評価上位順） ---
 gyofu_df["構成評価"] = (
     gyofu_df["着順補正"] * 0.8 +
     gyofu_df["SB印補正"] * 1.2 +
     gyofu_df["ライン補正"] * 0.4 +
     gyofu_df["グループ補正"] * 0.2
 )
-for line in gyofu_df["グループ補正"].unique():
-    line_df = gyofu_df[gyofu_df["グループ補正"] == line]
-    line_df = line_df.sort_values(by="構成評価", ascending=False)
-    for _, row in line_df.iterrows():
-        if len(final_candidates) >= 4:
-            break
-        picked = int(row["車番"])
-        if picked not in final_candidates:
-            final_candidates.append(picked)
-            selection_reason.append(f"漁夫の利ライン：{picked}")
+remaining_df = gyofu_df.sort_values(by="構成評価", ascending=False)
+for _, row in remaining_df.iterrows():
+    if len(final_candidates) >= 4:
+        break
+    picked = int(row["車番"])
+    if picked not in final_candidates:
+        final_candidates.append(picked)
+        selection_reason.append(f"漁夫の利ライン：{picked}")
 
 # --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
