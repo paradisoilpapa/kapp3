@@ -492,7 +492,14 @@ for i in range(1, 3):
 selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 final_candidates = [anchor_index]
 
-if len(main_line_cars) <= 3:
+if len(main_line_cars) >= 4:
+    for car in main_line_cars:
+        if car != anchor_index:
+            final_candidates.append(car)
+            selection_reason.append(f"メインライン：{car}")
+        if len(final_candidates) >= 4:
+            break
+else:
     main_df = df[df["車番"].isin(main_line_cars) & (df["車番"] != anchor_index)].copy()
     main_df["構成評価"] = (
         main_df["着順補正"] * 0.8 +
@@ -509,7 +516,7 @@ if len(main_line_cars) <= 3:
 
     if len(final_candidates) < 4:
         gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
-        gyofu_line_rank = []
+        gyofu_line_candidates = []
         for k in gyofu_line_keys:
             members = line_def[k]
             if not members:
@@ -521,26 +528,20 @@ if len(main_line_cars) <= 3:
                 sub_df["ライン補正"] * 0.4 +
                 sub_df["グループ補正"] * 0.2
             )
-            gyofu_line_rank.append((k, sub_df))
+            if len(sub_df) >= 1:
+                avg_score = sub_df["構成評価"].mean()
+                gyofu_line_candidates.append((k, avg_score, sub_df))
 
-        gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
-
-        if gyofu_line_rank:
-            top_gyofu_key, top_gyofu_df = gyofu_line_rank[0]
-            for _, row in top_gyofu_df.sort_values(by="構成評価", ascending=False).iterrows():
+        gyofu_line_candidates.sort(key=lambda x: x[1], reverse=True)
+        if gyofu_line_candidates:
+            best_gyofu_line = gyofu_line_candidates[0][2].sort_values(by="構成評価", ascending=False)
+            for _, row in best_gyofu_line.iterrows():
                 if len(final_candidates) >= 4:
                     break
                 picked = int(row["車番"])
                 if picked not in final_candidates:
                     final_candidates.append(picked)
                     selection_reason.append(f"漁夫の利ライン：{picked}")
-else:
-    for car in main_line_cars:
-        if car != anchor_index:
-            final_candidates.append(car)
-            selection_reason.append(f"メインライン：{car}")
-        if len(final_candidates) >= 4:
-            break
 
 # --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
