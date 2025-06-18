@@ -472,6 +472,16 @@ def find_line(car_no):
 main_line_key = find_line(anchor_index)
 main_line_cars = line_def.get(main_line_key, [])
 
+# --- 潰しラインを特定（スコア上位3から main_line を除いた最上位） ---
+score_top3 = df_sorted.iloc[:3].copy()
+tsubushi_line_key = None
+for i in range(1, 3):
+    candidate = int(score_top3.iloc[i]["車番"])
+    line_k = find_line(candidate)
+    if line_k and line_k != main_line_key:
+        tsubushi_line_key = line_k
+        break
+
 # --- フォーメーション構成選出 ---
 selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 final_candidates = [anchor_index]
@@ -486,7 +496,7 @@ if len(main_line_cars) < 4:
 
     if len(final_candidates) < 4:
         needed = 4 - len(final_candidates)
-        gyofu_line_keys = [k for k in line_def.keys() if k != main_line_key]
+        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
         for k in gyofu_line_keys:
             members = line_def[k]
             sub_df = df[df["車番"].isin(members)].copy()
@@ -506,16 +516,6 @@ if len(main_line_cars) < 4:
             if len(final_candidates) >= 4:
                 break
 else:
-    score_top3 = df_sorted.iloc[:3].copy()
-    for i in range(1, 3):
-        candidate = int(score_top3.iloc[i]["車番"])
-        line_k = find_line(candidate)
-        if line_k and line_k != main_line_key:
-            tsubushi_line_key = line_k
-            break
-    else:
-        tsubushi_line_key = None
-
     gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
 
     main_df = df[df["車番"].isin(main_line_cars) & (df["車番"] != anchor_index)].copy()
@@ -557,12 +557,12 @@ else:
 final_candidates = final_candidates[:4]
 selection_reason = selection_reason[:4]
 
-st.markdown("### 🎯 フォーメーション構成")
-for reason in selection_reason:
-    st.markdown(f"- {reason}")
-st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
+# --- 表示関数で出力を統一 ---
+def show_final_output(reasons, candidates):
+    st.markdown("### 🎯 フォーメーション構成")
+    for reason in reasons:
+        st.markdown(f"- {reason}")
+    st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, candidates))}）**")
 
-st.markdown("### 🎯 フォーメーション構成")
-for reason in selection_reason:
-    st.markdown(f"- {reason}")
-st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
+# 出力表示（1回だけ）
+show_final_output(selection_reason, final_candidates)
