@@ -492,14 +492,7 @@ for i in range(1, 3):
 selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 final_candidates = [anchor_index]
 
-if len(main_line_cars) >= 4:
-    for car in main_line_cars:
-        if car != anchor_index:
-            final_candidates.append(car)
-            selection_reason.append(f"メインライン：{car}")
-        if len(final_candidates) >= 4:
-            break
-else:
+if len(main_line_cars) <= 3:
     main_df = df[df["車番"].isin(main_line_cars) & (df["車番"] != anchor_index)].copy()
     main_df["構成評価"] = (
         main_df["着順補正"] * 0.8 +
@@ -538,6 +531,13 @@ else:
                 if picked not in final_candidates:
                     final_candidates.append(picked)
                     selection_reason.append(f"漁夫の利ライン：{picked}")
+else:
+    for car in main_line_cars:
+        if car != anchor_index:
+            final_candidates.append(car)
+            selection_reason.append(f"メインライン：{car}")
+        if len(final_candidates) >= 4:
+            break
 
 # --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
