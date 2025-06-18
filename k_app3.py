@@ -464,50 +464,41 @@ others["構成評価"] = (
 )
 
 final_candidates = [anchor_index]
-selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
+main_line = [anchor_index]
+gyofu_line = []
 
 if anchor_line_value == 0.0:
     # 単騎起点モード
     low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
     high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
-    if not low_B.empty:
-        final_candidates.append(int(low_B.iloc[0]["車番"]))
-        selection_reason.append(f"B回数2以下：{int(low_B.iloc[0]['車番'])}")
-    if not high_B.empty:
-        final_candidates.append(int(high_B.iloc[0]["車番"]))
-        selection_reason.append(f"B回数3以上：{int(high_B.iloc[0]['車番'])}")
-    used_cars = set(final_candidates)
-    rest = others[~others["車番"].isin(used_cars)].sort_values(by="構成評価", ascending=False)
-    if not rest.empty and len(final_candidates) < 4:
-        final_candidates.append(int(rest.iloc[0]["車番"]))
-        selection_reason.append(f"補完（構成評価）：{int(rest.iloc[0]['車番'])}")
+    combined = pd.concat([low_B, high_B]).sort_values(by="構成評価", ascending=False)
+    for _, row in combined.iterrows():
+        car = int(row["車番"])
+        if car not in final_candidates and len(final_candidates) < 4:
+            final_candidates.append(car)
+            gyofu_line.append(car)
 else:
     # ライン起点モード
     same_line = others[others["グループ補正"] == anchor_line_value].sort_values(by="構成評価", ascending=False)
     if not same_line.empty:
         picked = int(same_line.iloc[0]["車番"])
         final_candidates.append(picked)
-        selection_reason.append(f"ライン同一：{picked}")
+        main_line.append(picked)
         others = others[~others["車番"].isin([picked])]
 
-    low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
-    if not low_B.empty:
-        picked = int(low_B.iloc[0]["車番"])
-        final_candidates.append(picked)
-        selection_reason.append(f"B回数2以下：{picked}")
-        others = others[~others["車番"].isin([picked])]
-
-    high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
-    if not high_B.empty and len(final_candidates) < 4:
-        picked = int(high_B.iloc[0]["車番"])
-        final_candidates.append(picked)
-        selection_reason.append(f"B回数3以上：{picked}")
+    for _, row in others.sort_values(by="構成評価", ascending=False).iterrows():
+        car = int(row["車番"])
+        if car not in final_candidates and len(final_candidates) < 4:
+            final_candidates.append(car)
+            gyofu_line.append(car)
 
 # --- 最終出力（4車以内に制限） ---
 final_candidates = final_candidates[:4]
-selection_reason = selection_reason[:4]
+main_line = [c for c in final_candidates if c in main_line][:2]
+gyofu_line = [c for c in final_candidates if c in gyofu_line][:2]
 
+# --- 出力表示 ---
 st.markdown("### 🎯 フォーメーション構成")
-for reason in selection_reason:
-    st.markdown(f"- {reason}")
-st.markdown(f"👉 三連複4点：BOX（{', '.join(map(str, final_candidates))}）")
+st.markdown(f"- メインライン：{', '.join(map(str, main_line))}")
+st.markdown(f"- 漁夫の利ライン：{', '.join(map(str, gyofu_line))}")
+st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
