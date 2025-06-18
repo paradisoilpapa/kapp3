@@ -441,13 +441,19 @@ if len(b_list) != len(df):
 df["B回数"] = b_list
 
 # --- ライン構成取得 ---
-line_def = {
+line_def_raw = {
     'A': extract_car_list(a_line),
     'B': extract_car_list(b_line),
     'C': extract_car_list(c_line),
     'D': extract_car_list(d_line),
     '単騎': extract_car_list(solo_line)
 }
+
+# 単騎が複数ある場合は分割して個別ライン扱いに変更
+line_def = {k: v for k, v in line_def_raw.items() if k != '単騎'}
+solo_members = line_def_raw.get('単騎', [])
+for i, solo_car in enumerate(solo_members):
+    line_def[f'単騎{i+1}'] = [solo_car]
 
 # --- 合計スコアで並び替え ---
 df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
@@ -546,4 +552,3 @@ def show_final_output(reasons, candidates):
 
 # 出力表示（1回だけ）
 show_final_output(selection_reason, final_candidates)
-
