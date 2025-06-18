@@ -440,30 +440,6 @@ if len(b_list) != len(df):
     st.stop()
 df["B回数"] = b_list
 
-# --- ライン構成の取得 ---
-def extract_car_list(s):
-    return [int(x) for x in s if x.isdigit()]
-
-a_line = st.session_state.get("a_line", "")
-b_line = st.session_state.get("b_line", "")
-c_line = st.session_state.get("c_line", "")
-d_line = st.session_state.get("d_line", "")
-solo_line = st.session_state.get("solo_line", "")
-
-line_def = {
-    'A': extract_car_list(a_line),
-    'B': extract_car_list(b_line),
-    'C': extract_car_list(c_line),
-    'D': extract_car_list(d_line),
-    '単騎': extract_car_list(solo_line)
-}
-
-# --- ライン逆引き辞書 ---
-car_to_line = {}
-for line_name, members in line_def.items():
-    for car in members:
-        car_to_line[car] = line_name
-
 # --- 合計スコアで並び替え ---
 df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
 top_score = df_sorted.iloc[0]["合計スコア"]
@@ -476,55 +452,71 @@ df_top_range["構成評価"] = (
 )
 anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0]
 anchor_index = int(anchor_row["車番"])
-anchor_line = car_to_line.get(anchor_index, None)
+anchor_line_value = anchor_row["グループ補正"]
 
-# --- メインライン定義 ---
-main_members = line_def.get(anchor_line, [])
-main_df = df[df["車番"].isin(main_members) & (df["車番"] != anchor_index)].copy()
+# --- グループ補正でライン分け ---
+main_line = anchor_line_value
+
+# --- 潰しライン定義 ---
+line_values = df["グループ補正"].unique().tolist()
+line_values.remove(main_line)
+
+# スコア上位順にソートして潰しライン候補取得
+rival_df = df[df["グループ補正"].isin(line_values)].copy()
+rival_df["構成評価"] = (
+    rival_df["着順補正"] * 0.8 +
+    rival_df["SB印補正"] * 1.2 +
+    rival_df["ライン補正"] * 0.4 +
+    rival_df["グループ補正"] * 0.2
+)
+
+# 潰しライン候補から構成評価2位のラインを除外
+rival_lines_ranked = rival_df.groupby("グループ補正")["構成評価"].mean().sort_values(ascending=False)
+if len(rival_lines_ranked) >= 2:
+    excluded_line = rival_lines_ranked.index[1]  # 2位のライン
+else:
+    excluded_line = None
+
+# 漁夫の利ラインを決定（main + 潰しライン2位以外）
+excluded_lines = [main_line]
+if excluded_line is not None:
+    excluded_lines.append(excluded_line)
+gyofu_df = df[~df["グループ補正"].isin(excluded_lines)].copy()
+
+# ◎の構成評価理由
+selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
+final_candidates = [anchor_index]
+
+# --- メインラインから1車（◎を除く） ---
+main_df = df[(df["グループ補正"] == main_line) & (df["車番"] != anchor_index)].copy()
 main_df["構成評価"] = (
     main_df["着順補正"] * 0.8 +
     main_df["SB印補正"] * 1.2 +
     main_df["ライン補正"] * 0.4 +
     main_df["グループ補正"] * 0.2
 )
-
-# --- スコア2位のラインをライバルラインと定義 ---
-second_index = df_sorted[df_sorted["車番"] != anchor_index].iloc[0]["車番"]
-second_line = car_to_line.get(int(second_index), None)
-
-# --- 漁夫の利ライン抽出 ---
-excluded_lines = {anchor_line, second_line}
-remaining_cars = [car for line, members in line_def.items() if line not in excluded_lines for car in members]
-remaining_df = df[df["車番"].isin(remaining_cars)].copy()
-remaining_df["構成評価"] = (
-    remaining_df["着順補正"] * 0.8 +
-    remaining_df["SB印補正"] * 1.2 +
-    remaining_df["ライン補正"] * 0.4 +
-    remaining_df["グループ補正"] * 0.2
-)
-
-# --- 漁夫の利ラインが5車以上なら最低スコアを除外 ---
-if len(remaining_df) > 4:
-    remaining_df = remaining_df.sort_values(by="構成評価", ascending=False).head(4)
-
-remaining_df = remaining_df.sort_values(by="構成評価", ascending=False)
-final_candidates = [anchor_index]
-selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
-
-# --- メインラインから補完（◎以外） ---
 if not main_df.empty:
     picked = int(main_df.sort_values(by="構成評価", ascending=False).iloc[0]["車番"])
     final_candidates.append(picked)
     selection_reason.append(f"メインライン：{picked}")
 
-# --- 漁夫の利から2車 ---
-remaining_df = remaining_df[~remaining_df["車番"].isin(final_candidates)]
-for i in range(2):
-    if len(final_candidates) >= 4 or remaining_df.empty:
-        break
-    picked = int(remaining_df.iloc[i]["車番"])
-    final_candidates.append(picked)
-    selection_reason.append(f"漁夫の利ライン：{picked}")
+# --- 漁夫の利から最大2車（ライン単位でグループ化） ---
+gyofu_df["構成評価"] = (
+    gyofu_df["着順補正"] * 0.8 +
+    gyofu_df["SB印補正"] * 1.2 +
+    gyofu_df["ライン補正"] * 0.4 +
+    gyofu_df["グループ補正"] * 0.2
+)
+for line in gyofu_df["グループ補正"].unique():
+    line_df = gyofu_df[gyofu_df["グループ補正"] == line]
+    line_df = line_df.sort_values(by="構成評価", ascending=False)
+    for _, row in line_df.iterrows():
+        if len(final_candidates) >= 4:
+            break
+        picked = int(row["車番"])
+        if picked not in final_candidates:
+            final_candidates.append(picked)
+            selection_reason.append(f"漁夫の利ライン：{picked}")
 
 # --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
