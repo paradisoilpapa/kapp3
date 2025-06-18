@@ -464,6 +464,7 @@ others["構成評価"] = (
 )
 
 final_candidates = [anchor_index]
+selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 
 if anchor_line_value == 0.0:
     # 単騎起点モード
@@ -471,31 +472,42 @@ if anchor_line_value == 0.0:
     high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
     if not low_B.empty:
         final_candidates.append(int(low_B.iloc[0]["車番"]))
+        selection_reason.append(f"B回数2以下：{int(low_B.iloc[0]['車番'])}")
     if not high_B.empty:
         final_candidates.append(int(high_B.iloc[0]["車番"]))
+        selection_reason.append(f"B回数3以上：{int(high_B.iloc[0]['車番'])}")
     used_cars = set(final_candidates)
     rest = others[~others["車番"].isin(used_cars)].sort_values(by="構成評価", ascending=False)
     if not rest.empty and len(final_candidates) < 4:
         final_candidates.append(int(rest.iloc[0]["車番"]))
+        selection_reason.append(f"補完（構成評価）：{int(rest.iloc[0]['車番'])}")
 else:
     # ライン起点モード
     same_line = others[others["グループ補正"] == anchor_line_value].sort_values(by="構成評価", ascending=False)
     if not same_line.empty:
-        final_candidates.append(int(same_line.iloc[0]["車番"]))
-        others = others[~others["車番"].isin([same_line.iloc[0]["車番"]])]
+        picked = int(same_line.iloc[0]["車番"])
+        final_candidates.append(picked)
+        selection_reason.append(f"ライン同一：{picked}")
+        others = others[~others["車番"].isin([picked])]
 
     low_B = others[others["B回数"] <= 2].sort_values(by="構成評価", ascending=False)
     if not low_B.empty:
-        final_candidates.append(int(low_B.iloc[0]["車番"]))
-        others = others[~others["車番"].isin([low_B.iloc[0]["車番"]])]
+        picked = int(low_B.iloc[0]["車番"])
+        final_candidates.append(picked)
+        selection_reason.append(f"B回数2以下：{picked}")
+        others = others[~others["車番"].isin([picked])]
 
     high_B = others[others["B回数"] >= 3].sort_values(by="構成評価", ascending=False)
     if not high_B.empty and len(final_candidates) < 4:
-        final_candidates.append(int(high_B.iloc[0]["車番"]))
+        picked = int(high_B.iloc[0]["車番"])
+        final_candidates.append(picked)
+        selection_reason.append(f"B回数3以上：{picked}")
 
 # --- 最終出力（4車以内に制限） ---
 final_candidates = final_candidates[:4]
+selection_reason = selection_reason[:4]
 
 st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"◎（起点）：`{anchor_index}`")
-st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
+for reason in selection_reason:
+    st.markdown(f"- {reason}")
+st.markdown(f"👉 三連複4点：BOX（{', '.join(map(str, final_candidates))}）")
