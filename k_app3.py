@@ -508,13 +508,7 @@ if len(main_line_cars) <= 3:
             break
 
     if len(final_candidates) < 4:
-        exclude_lines = set()
-        if main_line_key is not None:
-            exclude_lines.add(main_line_key)
-        if tsubushi_line_key is not None:
-            exclude_lines.add(tsubushi_line_key)
-
-        gyofu_line_keys = [k for k in line_def.keys() if k not in exclude_lines]
+        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
         gyofu_line_rank = []
         for k in gyofu_line_keys:
             members = line_def[k]
@@ -529,10 +523,11 @@ if len(main_line_cars) <= 3:
             )
             gyofu_line_rank.append((k, sub_df))
 
-        gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
+        if gyofu_line_rank:
+            gyofu_line_rank.sort(key=lambda x: x[1]["構成評価"].mean(), reverse=True)
+            best_gyofu_df = gyofu_line_rank[0][1]  # 上位1ラインのみ使用
 
-        for _, sub_df in gyofu_line_rank:
-            for _, row in sub_df.sort_values(by="構成評価", ascending=False).iterrows():
+            for _, row in best_gyofu_df.sort_values(by="構成評価", ascending=False).iterrows():
                 if len(final_candidates) >= 4:
                     break
                 picked = int(row["車番"])
