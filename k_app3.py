@@ -454,29 +454,31 @@ anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0
 anchor_index = int(anchor_row["車番"])
 anchor_line_value = anchor_row["グループ補正"]
 
-# --- ライン定義 ---
+# --- グループ補正でライン分け ---
 line_groups = df.groupby("グループ補正")
-main_line = df[df["車番"] == anchor_index]["グループ補正"].values[0]
+main_line = anchor_line_value
 
-# --- スコア2位の選手のラインを敵対ラインと定義 ---
-enemy_line_value = df_sorted.iloc[1]["グループ補正"]
+# --- スコア2位のラインをライバルラインと定義 ---
+second_index = df_sorted[df_sorted["車番"] != anchor_index].iloc[0]["車番"]
+second_line_value = df[df["車番"] == second_index]["グループ補正"].values[0]
 
-# --- 漁夫の利ライン抽出（メインラインでも敵対ラインでもない） ---
-other_lines = [grp for grp in df["グループ補正"].unique() if grp not in [main_line, enemy_line_value]]
+# --- 漁夫の利ライン抽出（メイン・ライバル除外） ---
+excluded_lines = [main_line, second_line_value]
+remaining_df = df[~df["グループ補正"].isin(excluded_lines)].copy()
 
-gyofu_df = df[df["グループ補正"].isin(other_lines)].copy()
-gyofu_df["構成評価"] = (
-    gyofu_df["着順補正"] * 0.8 +
-    gyofu_df["SB印補正"] * 1.2 +
-    gyofu_df["ライン補正"] * 0.4 +
-    gyofu_df["グループ補正"] * 0.2
+# --- 残りから構成評価を計算 ---
+remaining_df["構成評価"] = (
+    remaining_df["着順補正"] * 0.8 +
+    remaining_df["SB印補正"] * 1.2 +
+    remaining_df["ライン補正"] * 0.4 +
+    remaining_df["グループ補正"] * 0.2
 )
 
 # --- 漁夫の利ラインが5車以上なら最低スコアを除外 ---
-if len(gyofu_df) > 4:
-    gyofu_df = gyofu_df.sort_values(by="構成評価", ascending=False).head(4)
+if len(remaining_df) > 4:
+    remaining_df = remaining_df.sort_values(by="構成評価", ascending=False).head(4)
 
-gyofu_df = gyofu_df.sort_values(by="構成評価", ascending=False)
+remaining_df = remaining_df.sort_values(by="構成評価", ascending=False)
 final_candidates = [anchor_index]
 selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 
@@ -495,11 +497,11 @@ if not main_pick.empty:
     selection_reason.append(f"メインライン：{picked}")
 
 # --- 漁夫の利から2車 ---
-gyofu_df = gyofu_df[~gyofu_df["車番"].isin(final_candidates)]
+remaining_df = remaining_df[~remaining_df["車番"].isin(final_candidates)]
 for i in range(2):
-    if len(final_candidates) >= 4 or gyofu_df.empty:
+    if len(final_candidates) >= 4 or remaining_df.empty:
         break
-    picked = int(gyofu_df.iloc[i]["車番"])
+    picked = int(remaining_df.iloc[i]["車番"])
     final_candidates.append(picked)
     selection_reason.append(f"漁夫の利ライン：{picked}")
 
