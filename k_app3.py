@@ -432,74 +432,95 @@ except NameError:
 import pandas as pd
 import streamlit as st
 
-# --- B回数列の統一（バック → B回数）---
+# --- B回数列の統一 ---
 df.rename(columns={"バック": "B回数"}, inplace=True)
-
-# --- B回数取得とチェック ---
 b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
 if len(b_list) != len(df):
     st.error("⚠ B回数の数が選手数と一致していません")
     st.stop()
 df["B回数"] = b_list
 
-# --- ◎（スコア1位）決定 ---
-anchor_row = df.sort_values(by="合計スコア", ascending=False).iloc[0]
+# --- 合計スコアで◎決定（スコア差0.5未満は適性スコア） ---
+top2 = df.sort_values(by="合計スコア", ascending=False).head(2)
+score_diff = top2.iloc[0]["合計スコア"] - top2.iloc[1]["合計スコア"]
+
+if score_diff >= 0.5:
+    anchor_row = top2.iloc[0]
+    anchor_reason = "スコア差0.5以上：スコア1位"
+else:
+    df["構成適性"] = (
+        df["着順補正"] * 0.8 +
+        df["SB印補正"] * 1.2 +
+        df["ライン補正"] * 0.4 +
+        df["グループ補正"] * 0.2
+    )
+    anchor_row = df.sort_values(by="構成適性", ascending=False).iloc[0]
+    anchor_reason = "スコア差0.5未満：構成適性"
+
 anchor_index = int(anchor_row["車番"])
+anchor_line_value = anchor_row["グループ補正"]
 
-# --- 各ラインの平均補正値計算 ---
-line_def = {
-    "A": st.session_state.get("a_line", ""),
-    "B": st.session_state.get("b_line", ""),
-    "C": st.session_state.get("c_line", ""),
-    "D": st.session_state.get("d_line", ""),
-}
+# --- ◎以外を抽出し構成適性を算出 ---
+others = df[df["車番"] != anchor_index].copy()
+others["構成適性"] = (
+    others["着順補正"] * 0.8 +
+    others["SB印補正"] * 1.2 +
+    others["ライン補正"] * 0.4 +
+    others["グループ補正"] * 0.2
+)
 
-line_avg = {}
-for group, val in line_def.items():
-    cars = [int(c) for c in val.strip() if c.isdigit()]
-    if cars:
-        sub_df = df[df["車番"].isin(cars)]
-        avg = (sub_df["着順補正"] + sub_df["ライン補正"] + sub_df["グループ補正"]).mean()
-        line_avg[group] = avg
+# --- 同グループ補正内の構成適性上位から1車選出 ---
+same_group = others[others["グループ補正"] == anchor_line_value]
+same_group = same_group[same_group["車番"] != anchor_index]
+line_pick = same_group.sort_values(by="構成適性", ascending=False).head(1)
 
-# --- 強ライン決定 ---
-strongest_group = max(line_avg.items(), key=lambda x: x[1])[0]
-strongest_cars = [int(c) for c in line_def[strongest_group] if c.isdigit()]
-sub_df = df[df["車番"].isin(strongest_cars)].copy()
-sub_df["補正合計"] = sub_df["着順補正"] + sub_df["ライン補正"] + sub_df["グループ補正"]
-strong_line_picks = sub_df.sort_values(by="補正合計", ascending=False)["車番"].tolist()
+# --- 展開補正の算出（風＋バンク＋着順） ---
+others_excluded = others[~others["車番"].isin([anchor_index])]
+if not line_pick.empty:
+    others_excluded = others_excluded[~others_excluded["車番"].isin(line_pick["車番"])]
 
-# ◎が含まれていれば残り1車、含まれてなければ2車選出
-line_final = []
-if anchor_index in strong_line_picks:
-    line_final.append([c for c in strong_line_picks if c != anchor_index][0])
+others_excluded["展開補正"] = (
+    others_excluded["着順補正"] +
+    others_excluded["風補正"] +
+    others_excluded["バンク補正"]
+)
+
+# --- B回数2以下・3以上でグループ分け ---
+low_group = others_excluded[others_excluded["B回数"] <= 2]
+high_group = others_excluded[others_excluded["B回数"] >= 3]
+
+low_mean = low_group["展開補正"].mean() if not low_group.empty else -1
+high_mean = high_group["展開補正"].mean() if not high_group.empty else -1
+
+if high_mean > low_mean:
+    final_pick_group = high_group
 else:
-    line_final.extend(strong_line_picks[:2])
+    final_pick_group = low_group
 
-# --- 展開補正のための準備 ---
-excluded = set([anchor_index] + line_final)
-df["展開補正"] = df["着順補正"] + df["風補正"] + df["バンク補正"]
+final_pick = final_pick_group.sort_values(by="展開補正", ascending=False).head(1)
 
-lowB_df = df[(df["B回数"] <= 2) & (~df["車番"].isin(excluded))]
-highB_df = df[(df["B回数"] >= 3) & (~df["車番"].isin(excluded))]
+# --- 最終構成車番リスト作成 ---
+final_candidates = [anchor_index]
+if not line_pick.empty:
+    final_candidates.append(int(line_pick.iloc[0]["車番"]))
+if not final_pick.empty:
+    final_candidates.append(int(final_pick.iloc[0]["車番"]))
 
-avg_low = lowB_df["展開補正"].mean() if not lowB_df.empty else -999
-avg_high = highB_df["展開補正"].mean() if not highB_df.empty else -999
+# --- 残り1枠を構成適性で埋める（未使用者から） ---
+used_cars = set(final_candidates)
+remaining_df = df[~df["車番"].isin(used_cars)].copy()
+remaining_df["構成適性"] = (
+    remaining_df["着順補正"] * 0.8 +
+    remaining_df["SB印補正"] * 1.2 +
+    remaining_df["ライン補正"] * 0.4 +
+    remaining_df["グループ補正"] * 0.2
+)
 
-if avg_low >= avg_high and not lowB_df.empty:
-    final_b_pick = lowB_df.sort_values(by="展開補正", ascending=False).iloc[0]["車番"]
-elif not highB_df.empty:
-    final_b_pick = highB_df.sort_values(by="展開補正", ascending=False).iloc[0]["車番"]
-else:
-    final_b_pick = None
+if len(final_candidates) < 4 and not remaining_df.empty:
+    last_pick = remaining_df.sort_values(by="構成適性", ascending=False).head(1)
+    final_candidates.append(int(last_pick.iloc[0]["車番"]))
 
-# --- 最終構成出力 ---
-final_set = [anchor_index] + line_final
-if final_b_pick: final_set.append(final_b_pick)
-
+# --- 出力 ---
 st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"◎（スコア1位）： `{anchor_index}`")
-st.markdown(f"強ライン（{strongest_group}）から： `{', '.join(map(str, line_final))}`")
-st.markdown(f"展開補正選出（B回数分岐）： `{final_b_pick if final_b_pick else '該当なし'}`")
-st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_set))}）**")
-
+st.markdown(f"◎（起点）：`{anchor_index}`（{anchor_reason}）")
+st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
