@@ -508,7 +508,11 @@ if len(main_line_cars) <= 3:
             break
 
     if len(final_candidates) < 4:
-        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
+        exclude_lines = {main_line_key}
+        if tsubushi_line_key:
+            exclude_lines.add(tsubushi_line_key)
+
+        gyofu_line_keys = [k for k in line_def.keys() if k not in exclude_lines]
         gyofu_line_rank = []
         for k in gyofu_line_keys:
             members = line_def[k]
