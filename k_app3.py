@@ -472,7 +472,7 @@ def find_line(car_no):
 main_line_key = find_line(anchor_index)
 main_line_cars = line_def.get(main_line_key, [])
 
-# --- 潰しラインを特定（スコア上位3から main_line を除いた最上位） ---
+# --- 潰しライン（スコア上位3から main_line を除いたライン） ---
 score_top3 = df_sorted.iloc[:3].copy()
 tsubushi_line_key = None
 for i in range(1, 3):
@@ -486,38 +486,14 @@ for i in range(1, 3):
 selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
 final_candidates = [anchor_index]
 
-if len(main_line_cars) < 4:
+if len(main_line_cars) >= 4:
     for car in main_line_cars:
         if car != anchor_index:
             final_candidates.append(car)
             selection_reason.append(f"メインライン：{car}")
         if len(final_candidates) >= 4:
             break
-
-    if len(final_candidates) < 4:
-        needed = 4 - len(final_candidates)
-        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
-        for k in gyofu_line_keys:
-            members = line_def[k]
-            sub_df = df[df["車番"].isin(members)].copy()
-            sub_df["構成評価"] = (
-                sub_df["着順補正"] * 0.8 +
-                sub_df["SB印補正"] * 1.2 +
-                sub_df["ライン補正"] * 0.4 +
-                sub_df["グループ補正"] * 0.2
-            )
-            for _, row in sub_df.sort_values(by="構成評価", ascending=False).iterrows():
-                picked = int(row["車番"])
-                if picked not in final_candidates:
-                    final_candidates.append(picked)
-                    selection_reason.append(f"漁夫の利ライン：{picked}")
-                    if len(final_candidates) >= 4:
-                        break
-            if len(final_candidates) >= 4:
-                break
 else:
-    gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
-
     main_df = df[df["車番"].isin(main_line_cars) & (df["車番"] != anchor_index)].copy()
     main_df["構成評価"] = (
         main_df["着順補正"] * 0.8 +
@@ -525,33 +501,37 @@ else:
         main_df["ライン補正"] * 0.4 +
         main_df["グループ補正"] * 0.2
     )
-    if not main_df.empty:
-        picked = int(main_df.sort_values(by="構成評価", ascending=False).iloc[0]["車番"])
+    for _, row in main_df.sort_values(by="構成評価", ascending=False).iterrows():
+        picked = int(row["車番"])
         final_candidates.append(picked)
         selection_reason.append(f"メインライン：{picked}")
+        if len(final_candidates) >= 4:
+            break
 
-    gyofu_line_rank = []
-    for k in gyofu_line_keys:
-        members = line_def[k]
-        if not members:
-            continue
-        sub_df = df[df["車番"].isin(members)].copy()
-        sub_df["構成評価"] = (
-            sub_df["着順補正"] * 0.8 +
-            sub_df["SB印補正"] * 1.2 +
-            sub_df["ライン補正"] * 0.4 +
-            sub_df["グループ補正"] * 0.2
-        )
-        gyofu_line_rank.append((k, sub_df))
+    if len(final_candidates) < 4:
+        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
+        gyofu_line_rank = []
+        for k in gyofu_line_keys:
+            members = line_def[k]
+            if not members:
+                continue
+            sub_df = df[df["車番"].isin(members)].copy()
+            sub_df["構成評価"] = (
+                sub_df["着順補正"] * 0.8 +
+                sub_df["SB印補正"] * 1.2 +
+                sub_df["ライン補正"] * 0.4 +
+                sub_df["グループ補正"] * 0.2
+            )
+            gyofu_line_rank.append((k, sub_df))
 
-    for _, sub_df in gyofu_line_rank:
-        for _, row in sub_df.sort_values(by="構成評価", ascending=False).iterrows():
-            if len(final_candidates) >= 4:
-                break
-            picked = int(row["車番"])
-            if picked not in final_candidates:
-                final_candidates.append(picked)
-                selection_reason.append(f"漁夫の利ライン：{picked}")
+        for _, sub_df in gyofu_line_rank:
+            for _, row in sub_df.sort_values(by="構成評価", ascending=False).iterrows():
+                if len(final_candidates) >= 4:
+                    break
+                picked = int(row["車番"])
+                if picked not in final_candidates:
+                    final_candidates.append(picked)
+                    selection_reason.append(f"漁夫の利ライン：{picked}")
 
 # --- 最終出力（4車に制限） ---
 final_candidates = final_candidates[:4]
@@ -566,3 +546,4 @@ def show_final_output(reasons, candidates):
 
 # 出力表示（1回だけ）
 show_final_output(selection_reason, final_candidates)
+
