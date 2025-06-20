@@ -459,7 +459,7 @@ solo_members = line_def_raw.get('単騎', [])
 for i, solo_car in enumerate(solo_members):
     line_def[f'単騎{i+1}'] = [solo_car]
 
-# --- ◎決定：構成評価上位から選出 ---
+# --- ◎決定 ---
 df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
 top_score = df_sorted.iloc[0]["合計スコア"]
 df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
@@ -506,22 +506,17 @@ a_others = [a for a in a_line if a != anchor]
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
 selection_reason = {"構成①": [], "構成②": [], "構成③": []}
 
-# 構成①：◎–A–C（本命＋漁夫）→ 最大2点、スコア優先で構成
+# 構成①：◎–A–C（本命＋漁夫）
 if len(a_others) >= 1 and len(c_line) >= 1:
     a_df = df[df["車番"].isin(a_others)].copy()
-    a_df["構成評価"] = (
-        a_df["着順補正"] * 0.8 +
-        a_df["SB印補正"] * 1.2 +
-        a_df["ライン補正"] * 0.4 +
-        a_df["グループ補正"] * 0.2
-    )
     c_df = df[df["車番"].isin(c_line)].copy()
-    c_df["構成評価"] = (
-        c_df["着順補正"] * 0.8 +
-        c_df["SB印補正"] * 1.2 +
-        c_df["ライン補正"] * 0.4 +
-        c_df["グループ補正"] * 0.2
-    )
+    for d in [a_df, c_df]:
+        d["構成評価"] = (
+            d["着順補正"] * 0.8 +
+            d["SB印補正"] * 1.2 +
+            d["ライン補正"] * 0.4 +
+            d["グループ補正"] * 0.2
+        )
     a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
     c_top2 = list(c_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
     count = 0
@@ -538,7 +533,7 @@ if len(a_others) >= 1 and len(c_line) >= 1:
         if count >= 2:
             break
 
-# 構成②：Bスコア上位2車＋Aラインから1車を加えて2点
+# 構成②：Bスコア上位2車＋Aラインから1車
 if len(b_line) >= 2 and len(a_line) >= 1:
     b_df = df[df["車番"].isin(b_line)].copy()
     b_df["構成評価"] = (
@@ -556,12 +551,15 @@ if len(b_line) >= 2 and len(a_line) >= 1:
         a_df["グループ補正"] * 0.2
     )
     a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
+    max_combinations_struct2 = 1 if len(b_line) <= 2 else 2
+    count = 0
     for a in a_top2:
         kumi = tuple(sorted([b_top2[0], b_top2[1], a]))
         if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]:
             kumi_awase["構成②"].append(kumi)
             selection_reason["構成②"].append(f"B({b_top2[0]},{b_top2[1]})–A({a}):潰れ残り保険")
-        if len(kumi_awase["構成②"]) >= 2:
+            count += 1
+        if count >= max_combinations_struct2:
             break
 
 # 構成③：C–A–B（荒れ展開）→ 1点
