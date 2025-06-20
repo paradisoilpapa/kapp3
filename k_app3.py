@@ -527,7 +527,7 @@ if len(b_line) >= 2:
             kumi_awase["構成②"].append(kumi)
             selection_reason["構成②"].append(f"B({b1},{b2})–◎({anchor})")
 
-# 構成③：◎–A上位2–Aライン残り
+# 構成③：◎–A上位2–Aライン残り全てとの組合せ
 if len(a_line_filtered) >= 3:
     a_df = df[df["車番"].isin(a_line_filtered)].copy()
     a_df["構成評価"] = (
@@ -538,12 +538,13 @@ if len(a_line_filtered) >= 3:
     )
     a_sorted = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
     top2 = a_sorted[:2]
-    remaining = [a for a in a_sorted[2:]]
+    remaining = [a for a in a_sorted if a not in top2]
     for rem in remaining:
-        kumi = tuple(sorted([anchor, top2[0], rem]))
-        if kumi not in kumi_awase["構成③"]:
-            kumi_awase["構成③"].append(kumi)
-            selection_reason["構成③"].append(f"◎({anchor})–A上位2({top2[0]},{top2[1]})–A残り({rem})")
+        for a_top in top2:
+            kumi = tuple(sorted([anchor, a_top, rem]))
+            if kumi not in kumi_awase["構成③"]:
+                kumi_awase["構成③"].append(kumi)
+                selection_reason["構成③"].append(f"◎({anchor})–A上位({a_top})–A残り({rem})")
 
 # --- 最終出力 ---
 final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
