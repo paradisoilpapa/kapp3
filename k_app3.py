@@ -488,71 +488,125 @@ for i in range(1, 3):
         tsubushi_line_key = line_k
         break
 
-# --- フォーメーション構成選出 ---
-selection_reason = [f"◎（起点）：{anchor_index}（構成評価上位）"]
-final_candidates = [anchor_index]
+from itertools import combinations
+import pandas as pd
+import streamlit as st
 
-if len(main_line_cars) >= 4:
-    for car in main_line_cars:
-        if car != anchor_index:
-            final_candidates.append(car)
-            selection_reason.append(f"メインライン：{car}")
-        if len(final_candidates) >= 4:
+# --- B回数列の統一 ---
+df.rename(columns={"バック": "B回数"}, inplace=True)
+b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
+if len(b_list) != len(df):
+    st.error("⚠ B回数の数が選手数と一致していません")
+    st.stop()
+df["B回数"] = b_list
+
+# --- ライン構成取得 ---
+line_def_raw = {
+    'A': extract_car_list(a_line),
+    'B': extract_car_list(b_line),
+    'C': extract_car_list(c_line),
+    'D': extract_car_list(d_line),
+    '単騎': extract_car_list(solo_line)
+}
+
+# 単騎が複数ある場合は個別化
+line_def = {k: v for k, v in line_def_raw.items() if k != '単騎'}
+solo_members = line_def_raw.get('単騎', [])
+for i, solo_car in enumerate(solo_members):
+    line_def[f'単騎{i+1}'] = [solo_car]
+
+# --- ◎決定：構成評価上位から選出 ---
+df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
+top_score = df_sorted.iloc[0]["合計スコア"]
+df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
+df_top_range["構成評価"] = (
+    df_top_range["着順補正"] * 0.8 +
+    df_top_range["SB印補正"] * 1.2 +
+    df_top_range["ライン補正"] * 0.4 +
+    df_top_range["グループ補正"] * 0.2
+)
+anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0]
+anchor = int(anchor_row["車番"])
+
+# --- ライン分類 ---
+def find_line(car_no):
+    for k, v in line_def.items():
+        if car_no in v:
+            return k
+    return None
+
+main_line_key = find_line(anchor)
+main_line = line_def.get(main_line_key, [])
+
+# 潰しライン（スコア上位3から本命を除外）
+score_top3 = df_sorted.iloc[:3].copy()
+tsubushi_line_key = None
+for i in range(1, 3):
+    candidate = int(score_top3.iloc[i]["車番"])
+    line_k = find_line(candidate)
+    if line_k and line_k != main_line_key:
+        tsubushi_line_key = line_k
+        break
+
+# 漁夫ライン
+gyofu_keys = [k for k in line_def if k not in [main_line_key, tsubushi_line_key]]
+
+a_line = main_line
+b_line = line_def.get(tsubushi_line_key, [])
+c_line = []
+for k in gyofu_keys:
+    c_line.extend(line_def[k])
+
+# --- 三連複構成抽出 ---
+a_others = [a for a in a_line if a != anchor]
+kumi_awase = set()
+selection_reason = []
+
+# 構成①：◎–A–C（最大2点）
+if len(a_others) >= 1 and len(c_line) >= 1:
+    for a in a_others:
+        for c in c_line[:2]:
+            kumi = tuple(sorted([anchor, a, c]))
+            kumi_awase.add(kumi)
+            selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
+
+# 構成②：B–B–A（最大2点）
+if len(b_line) >= 2:
+    b_combos = list(combinations(b_line, 2))
+    for b1, b2 in b_combos:
+        for a in a_line[:2]:
+            kumi = tuple(sorted([b1, b2, a]))
+            kumi_awase.add(kumi)
+            selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
+
+# 構成③：C–A–B（1点）
+if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
+    c = c_line[0]
+    a = a_line[0] if a_line[0] != anchor else (a_line[1] if len(a_line) > 1 else anchor)
+    b = b_line[0]
+    kumi = tuple(sorted([c, a, b]))
+    kumi_awase.add(kumi)
+    selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
+
+# 保険構成：AラインBOX
+if len(kumi_awase) < 5 and len(a_line) >= 3:
+    a_combos = list(combinations(a_line, 3))
+    for combo in a_combos:
+        kumi_awase.add(tuple(sorted(combo)))
+        selection_reason.append(f"A({combo[0]},{combo[1]},{combo[2]})：保険AラインBOX")
+        if len(kumi_awase) >= 5:
             break
-else:
-    main_df = df[df["車番"].isin(main_line_cars) & (df["車番"] != anchor_index)].copy()
-    main_df["構成評価"] = (
-        main_df["着順補正"] * 0.8 +
-        main_df["SB印補正"] * 1.2 +
-        main_df["ライン補正"] * 0.4 +
-        main_df["グループ補正"] * 0.2
-    )
-    for _, row in main_df.sort_values(by="構成評価", ascending=False).iterrows():
-        picked = int(row["車番"])
-        final_candidates.append(picked)
-        selection_reason.append(f"メインライン：{picked}")
-        if len(final_candidates) >= 4:
-            break
 
-    if len(final_candidates) < 4:
-        gyofu_line_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
-        gyofu_line_candidates = []
-        for k in gyofu_line_keys:
-            members = line_def[k]
-            if not members:
-                continue
-            sub_df = df[df["車番"].isin(members)].copy()
-            sub_df["構成評価"] = (
-                sub_df["着順補正"] * 0.8 +
-                sub_df["SB印補正"] * 1.2 +
-                sub_df["ライン補正"] * 0.4 +
-                sub_df["グループ補正"] * 0.2
-            )
-            if len(sub_df) >= 1:
-                avg_score = sub_df["構成評価"].mean()
-                gyofu_line_candidates.append((k, avg_score, sub_df))
+# --- 最終出力 ---
+final_candidates = list(sorted(kumi_awase))[:5]
+selection_reason = selection_reason[:5]
 
-        gyofu_line_candidates.sort(key=lambda x: x[1], reverse=True)
-        if gyofu_line_candidates:
-            best_gyofu_line = gyofu_line_candidates[0][2].sort_values(by="構成評価", ascending=False)
-            for _, row in best_gyofu_line.iterrows():
-                if len(final_candidates) >= 4:
-                    break
-                picked = int(row["車番"])
-                if picked not in final_candidates:
-                    final_candidates.append(picked)
-                    selection_reason.append(f"漁夫の利ライン：{picked}")
-
-# --- 最終出力（4車に制限） ---
-final_candidates = final_candidates[:4]
-selection_reason = selection_reason[:4]
-
-# --- 表示関数で出力を統一 ---
 def show_final_output(reasons, candidates):
     st.markdown("### 🎯 フォーメーション構成")
     for reason in reasons:
         st.markdown(f"- {reason}")
-    st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, candidates))}）**")
+    for i, kumi in enumerate(candidates, 1):
+        st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
 
-# 出力表示（1回だけ）
 show_final_output(selection_reason, final_candidates)
+
