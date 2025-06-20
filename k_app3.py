@@ -478,23 +478,8 @@ selection_reason = {"構成①": [], "構成②": [], "構成③": []}
 c_group = c_line + d_line + solo_members
 a_line_filtered = [a for a in a_line if a != anchor]
 if len(a_line_filtered) >= 1 and len(c_group) >= 1:
-    a_df = df[df["車番"].isin(a_line_filtered)].copy()
-    a_df["構成評価"] = (
-        a_df["着順補正"] * 0.8 +
-        a_df["SB印補正"] * 1.2 +
-        a_df["ライン補正"] * 0.4 +
-        a_df["グループ補正"] * 0.2
-    )
-    a_sorted = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
-
-    c_df = df[df["車番"].isin(c_group)].copy()
-    c_df["構成評価"] = (
-        c_df["着順補正"] * 0.8 +
-        c_df["SB印補正"] * 1.2 +
-        c_df["ライン補正"] * 0.4 +
-        c_df["グループ補正"] * 0.2
-    )
-    c_sorted = list(c_df.sort_values(by="構成評価", ascending=False)["車番"])
+    a_sorted = list(df[df["車番"].isin(a_line_filtered)].sort_values(by="合計スコア", ascending=False)["車番"])
+    c_sorted = list(df[df["車番"].isin(c_group)].sort_values(by="合計スコア", ascending=False)["車番"])
 
     for a in a_sorted:
         for c in c_sorted:
@@ -505,14 +490,7 @@ if len(a_line_filtered) >= 1 and len(c_group) >= 1:
 
 # 構成②：対抗ラインスコア上位2–◎
 if len(b_line) >= 2:
-    b_df = df[df["車番"].isin(b_line)].copy()
-    b_df["構成評価"] = (
-        b_df["着順補正"] * 0.8 +
-        b_df["SB印補正"] * 1.2 +
-        b_df["ライン補正"] * 0.4 +
-        b_df["グループ補正"] * 0.2
-    )
-    b_sorted = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:3])
+    b_sorted = list(df[df["車番"].isin(b_line)].sort_values(by="合計スコア", ascending=False)["車番"][:3])
     for b1, b2 in combinations(b_sorted, 2):
         kumi = tuple(sorted([anchor, b1, b2]))
         if kumi not in kumi_awase["構成②"]:
@@ -521,14 +499,7 @@ if len(b_line) >= 2:
 
 # 構成③：◎–A上位2–Aライン残り全てとの組合せ（2名分）
 if len(a_line_filtered) >= 3:
-    a_df = df[df["車番"].isin(a_line_filtered)].copy()
-    a_df["構成評価"] = (
-        a_df["着順補正"] * 0.8 +
-        a_df["SB印補正"] * 1.2 +
-        a_df["ライン補正"] * 0.4 +
-        a_df["グループ補正"] * 0.2
-    )
-    a_sorted = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
+    a_sorted = list(df[df["車番"].isin(a_line_filtered)].sort_values(by="合計スコア", ascending=False)["車番"])
     top2 = a_sorted[:2]
     remaining = [a for a in a_sorted if a not in top2]
     for a1 in top2:
@@ -554,4 +525,3 @@ for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
-)
