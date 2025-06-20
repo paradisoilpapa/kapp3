@@ -538,8 +538,8 @@ if len(a_others) >= 1 and len(c_line) >= 1:
         if count >= 2:
             break
 
-# 構成②：Bスコア上位2車＋Aライン上位2車から1車ずつ→2点
-if len(b_line) >= 2 and len(a_others) >= 2:
+# 構成②：Bスコア上位2車＋Aラインから1車を加えて2点
+if len(b_line) >= 2 and len(a_line) >= 1:
     b_df = df[df["車番"].isin(b_line)].copy()
     b_df["構成評価"] = (
         b_df["着順補正"] * 0.8 +
@@ -547,14 +547,14 @@ if len(b_line) >= 2 and len(a_others) >= 2:
         b_df["ライン補正"] * 0.4 +
         b_df["グループ補正"] * 0.2
     )
-    a_df = df[df["車番"].isin(a_others)].copy()
+    b_top2 = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
+    a_df = df[df["車番"].isin(a_line)].copy()
     a_df["構成評価"] = (
         a_df["着順補正"] * 0.8 +
         a_df["SB印補正"] * 1.2 +
         a_df["ライン補正"] * 0.4 +
         a_df["グループ補正"] * 0.2
     )
-    b_top2 = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
     a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
     for a in a_top2:
         kumi = tuple(sorted([b_top2[0], b_top2[1], a]))
