@@ -538,8 +538,8 @@ if len(a_others) >= 1 and len(c_line) >= 1:
         if count >= 2:
             break
 
-# 構成②：Bスコア上位2車＋その2車にAラインスコア上位1車を加える
-if len(b_line) >= 2 and len(a_line) >= 1:
+# 構成②：Bスコア上位2車＋Aライン上位2車から1車ずつ→2点
+if len(b_line) >= 2 and len(a_others) >= 2:
     b_df = df[df["車番"].isin(b_line)].copy()
     b_df["構成評価"] = (
         b_df["着順補正"] * 0.8 +
@@ -547,7 +547,7 @@ if len(b_line) >= 2 and len(a_line) >= 1:
         b_df["ライン補正"] * 0.4 +
         b_df["グループ補正"] * 0.2
     )
-    a_df = df[df["車番"].isin(a_line)].copy()
+    a_df = df[df["車番"].isin(a_others)].copy()
     a_df["構成評価"] = (
         a_df["着順補正"] * 0.8 +
         a_df["SB印補正"] * 1.2 +
@@ -555,17 +555,19 @@ if len(b_line) >= 2 and len(a_line) >= 1:
         a_df["グループ補正"] * 0.2
     )
     b_top2 = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
-    a_top1 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:1])
-    for a in a_top1:
+    a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
+    for a in a_top2:
         kumi = tuple(sorted([b_top2[0], b_top2[1], a]))
         if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]:
             kumi_awase["構成②"].append(kumi)
-            selection_reason["構成②"].append(f"B({b_top2[0]},{b_top2[1]})–A({a})：潰れ残り保険")
+            selection_reason["構成②"].append(f"B({b_top2[0]},{b_top2[1]})–A({a}):潰れ残り保険")
+        if len(kumi_awase["構成②"]) >= 2:
+            break
 
 # 構成③：C–A–B（荒れ展開）→ 1点
-if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
+if len(c_line) >= 1 and len(a_others) >= 1 and len(b_line) >= 1:
     c = c_line[0]
-    a = a_line[0] if a_line[0] != anchor else (a_line[1] if len(a_line) > 1 else anchor)
+    a = a_others[0]
     b = b_line[0]
     kumi = tuple(sorted([c, a, b]))
     if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"]:
@@ -588,4 +590,3 @@ for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
-
