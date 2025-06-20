@@ -518,7 +518,7 @@ if len(a_others) >= 1 and len(c_line) >= 2:
             kumi = tuple(sorted([anchor, a, c]))
             if kumi not in kumi_awase:
                 kumi_awase.add(kumi)
-                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
+                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命ライン={main_line_key}, 漁夫ライン={k}：本命＋漁夫構成")
                 used_c_set.add(c)
                 break
         if len(used_c_set) >= 2:
@@ -533,7 +533,7 @@ if len(b_line) >= 2:
             kumi = tuple(sorted([b1, b2, a]))
             if kumi not in kumi_awase:
                 kumi_awase.add(kumi)
-                selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
+                selection_reason.append(f"B({b1},{b2})–A({a})：Bライン={tsubushi_line_key}, 本命ライン={main_line_key}：潰れ残り保険")
                 used_b_combos += 1
                 break
         if used_b_combos >= 2:
@@ -547,7 +547,7 @@ if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
     kumi = tuple(sorted([c, a, b]))
     if kumi not in kumi_awase:
         kumi_awase.add(kumi)
-        selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
+        selection_reason.append(f"C({c})–A({a})–B({b})：漁夫ライン={k}, 本命ライン={main_line_key}, 潰しライン={tsubushi_line_key}：荒れ展開対応")
 
 # --- 最終出力 ---
 final_candidates = list(sorted(kumi_awase))[:5]
