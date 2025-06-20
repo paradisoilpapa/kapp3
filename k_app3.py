@@ -492,10 +492,9 @@ for i in range(1, 3):
         tsubushi_line_key = line_k
         break
 
-# 漁夫ライン（単騎も別ラインとして正しく扱う）
-gyofu_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
+# 漁夫ライン
+gyofu_keys = [k for k in line_def if k not in [main_line_key, tsubushi_line_key]]
 
-# ライン分け
 a_line = main_line
 b_line = line_def.get(tsubushi_line_key, [])
 c_line = []
@@ -507,22 +506,37 @@ a_others = [a for a in a_line if a != anchor]
 kumi_awase = set()
 selection_reason = []
 
-# 構成①：◎–A–C（本命＋漁夫）→ 2点厳守
-used_c_set = set()
-if len(a_others) >= 1 and len(c_line) >= 2:
-    for c in c_line:
-        if c in used_c_set:
-            continue
-        for a in a_others:
+# 構成①：◎–A–C（本命＋漁夫）→ 最大2点、スコア優先で構成
+if len(a_others) >= 1 and len(c_line) >= 1:
+    a_df = df[df["車番"].isin(a_others)].copy()
+    a_df["構成評価"] = (
+        a_df["着順補正"] * 0.8 +
+        a_df["SB印補正"] * 1.2 +
+        a_df["ライン補正"] * 0.4 +
+        a_df["グループ補正"] * 0.2
+    )
+    c_df = df[df["車番"].isin(c_line)].copy()
+    c_df["構成評価"] = (
+        c_df["着順補正"] * 0.8 +
+        c_df["SB印補正"] * 1.2 +
+        c_df["ライン補正"] * 0.4 +
+        c_df["グループ補正"] * 0.2
+    )
+    a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
+    c_top2 = list(c_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
+    count = 0
+    for a in a_top2:
+        for c in c_top2:
+            if count >= 2:
+                break
             if a == c:
                 continue
             kumi = tuple(sorted([anchor, a, c]))
             if kumi not in kumi_awase:
                 kumi_awase.add(kumi)
                 selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
-                used_c_set.add(c)
-                break
-        if len(used_c_set) >= 2:
+                count += 1
+        if count >= 2:
             break
 
 # 構成②：B–B–A（中穴）→ 2点厳守
@@ -566,4 +580,3 @@ for reason in selection_reason:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
-
