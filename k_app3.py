@@ -531,12 +531,12 @@ if len(a_line_filtered) >= 3:
     a_sorted = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
     top2 = a_sorted[:2]
     remaining = [a for a in a_sorted if a not in top2]
-    for rem in remaining:
-        for a_top in top2:
-            kumi = tuple(sorted([anchor, a_top, rem]))
+    for a1 in top2:
+        for rem in remaining:
+            kumi = tuple(sorted([anchor, a1, rem]))
             if kumi not in kumi_awase["構成③"]:
                 kumi_awase["構成③"].append(kumi)
-                selection_reason["構成③"].append(f"◎({anchor})–A上位({a_top})–A残り({rem})")
+                selection_reason["構成③"].append(f"◎({anchor})–A上位({a1})–A残り({rem})")
 
 # --- 最終出力 ---
 final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
@@ -554,3 +554,4 @@ for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
+)
