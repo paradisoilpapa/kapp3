@@ -501,7 +501,6 @@ c_line = []
 for k in gyofu_keys:
     c_line.extend(line_def[k])
 
-# --- 三連複構成抽出 ---
 a_others = [a for a in a_line if a != anchor]
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
 selection_reason = {"構成①": [], "構成②": [], "構成③": []}
@@ -533,7 +532,7 @@ if len(a_others) >= 1 and len(c_line) >= 1:
         if count >= 2:
             break
 
-# 構成②：Bスコア上位2車＋Aラインから1車
+# 構成②：B–B–A（本命が飛んだ展開）
 if len(b_line) >= 2 and len(a_line) >= 1:
     b_df = df[df["車番"].isin(b_line)].copy()
     b_df["構成評価"] = (
@@ -550,41 +549,39 @@ if len(b_line) >= 2 and len(a_line) >= 1:
         a_df["ライン補正"] * 0.4 +
         a_df["グループ補正"] * 0.2
     )
-    a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
-    max_combinations_struct2 = 1 if len(b_line) <= 2 else 2
-    count = 0
-    for a in a_top2:
+    a_top1 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:1])
+    for a in a_top1:
         kumi = tuple(sorted([b_top2[0], b_top2[1], a]))
-        if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]:
+        if kumi not in kumi_awase["構成①"]:
             kumi_awase["構成②"].append(kumi)
-            selection_reason["構成②"].append(f"B({b_top2[0]},{b_top2[1]})–A({a}):潰れ残り保険")
-            count += 1
-        if count >= max_combinations_struct2:
-            break
+            selection_reason["構成②"].append(f"B({b_top2[0]},{b_top2[1]})–A({a})：対抗→本命構成")
 
-# 構成③：C–A–B（荒れ展開）→ 1点
-if len(c_line) >= 1 and len(a_others) >= 1 and len(b_line) >= 1:
-    c = c_line[0]
-    a = a_others[0]
-    b = b_line[0]
-    kumi = tuple(sorted([c, a, b]))
-    if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"]:
-        kumi_awase["構成③"].append(kumi)
-        selection_reason["構成③"].append(f"C({c})–A({a})–B({b})：荒れ展開対応")
+# 構成③：同ライン決着（保険）
+if len(a_line) >= 3:
+    a_df = df[df["車番"].isin(a_line)].copy()
+    a_df["構成評価"] = (
+        a_df["着順補正"] * 0.8 +
+        a_df["SB印補正"] * 1.2 +
+        a_df["ライン補正"] * 0.4 +
+        a_df["グループ補正"] * 0.2
+    )
+    a_top3 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:3])
+    kumi = tuple(sorted(a_top3))
+    kumi_awase["構成③"].append(kumi)
+    selection_reason["構成③"].append(f"A({a_top3[0]},{a_top3[1]},{a_top3[2]})：本命ライン同士")
 
-# --- 最終出力（構成順に並べる） ---
+# --- 最終出力 ---
 final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
 selection_reason_flat = selection_reason["構成①"] + selection_reason["構成②"] + selection_reason["構成③"]
 
-# ライン表示まとめ
 st.markdown("### 🔹 ライン定義")
 st.markdown(f"- 本命ライン（A）：{sorted(a_line)}")
 st.markdown(f"- 対抗ライン（B）：{sorted(b_line)}")
 st.markdown(f"- 漁夫の利ライン（C）：{sorted(c_line)}")
 
-# 表示
 st.markdown("### 🎯 フォーメーション構成")
 for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
+
