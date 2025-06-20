@@ -557,8 +557,8 @@ def show_final_output(reasons, candidates):
     st.markdown("### 🎯 フォーメーション構成")
     for reason in reasons:
         st.markdown(f"- {reason}")
+    st.markdown("\n**▼ 組番一覧：**")
     for i, kumi in enumerate(candidates, 1):
         st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
 
 show_final_output(selection_reason, final_candidates)
-
