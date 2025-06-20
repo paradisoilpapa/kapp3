@@ -482,10 +482,11 @@ anchor = int(anchor_row["車番"])
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
 selection_reason = {"構成①": [], "構成②": [], "構成③": []}
 
-# 構成①：◎–Aラインのうち2車–Cグループ（C+D+単騎）から1車
+# 構成①：◎–A–Cグループ（A残り1＋Cグループ1）
 c_group = c_line + d_line + solo_members
-if len(a_line) >= 3 and len(c_group) >= 1:
-    a_df = df[df["車番"].isin(a_line)].copy()
+a_line_filtered = [a for a in a_line if a != anchor]
+if len(a_line_filtered) >= 1 and len(c_group) >= 1:
+    a_df = df[df["車番"].isin(a_line_filtered)].copy()
     a_df["構成評価"] = (
         a_df["着順補正"] * 0.8 +
         a_df["SB印補正"] * 1.2 +
@@ -493,24 +494,24 @@ if len(a_line) >= 3 and len(c_group) >= 1:
         a_df["グループ補正"] * 0.2
     )
     a_sorted = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
-    a_sorted = [x for x in a_sorted if x != anchor]
-    if len(a_sorted) >= 2:
-        top2 = a_sorted[:2]
-        c_df = df[df["車番"].isin(c_group)].copy()
-        c_df["構成評価"] = (
-            c_df["着順補正"] * 0.8 +
-            c_df["SB印補正"] * 1.2 +
-            c_df["ライン補正"] * 0.4 +
-            c_df["グループ補正"] * 0.2
-        )
-        c_sorted = list(c_df.sort_values(by="構成評価", ascending=False)["車番"])
+
+    c_df = df[df["車番"].isin(c_group)].copy()
+    c_df["構成評価"] = (
+        c_df["着順補正"] * 0.8 +
+        c_df["SB印補正"] * 1.2 +
+        c_df["ライン補正"] * 0.4 +
+        c_df["グループ補正"] * 0.2
+    )
+    c_sorted = list(c_df.sort_values(by="構成評価", ascending=False)["車番"])
+
+    for a in a_sorted:
         for c in c_sorted:
-            kumi = tuple(sorted([anchor, top2[0], c]))
+            kumi = tuple(sorted([anchor, a, c]))
             if kumi not in kumi_awase["構成①"]:
                 kumi_awase["構成①"].append(kumi)
-                selection_reason["構成①"].append(f"◎({anchor})–A上位2({top2[0]},{top2[1]})–C({c})")
+                selection_reason["構成①"].append(f"◎({anchor})–A({a})–C({c})")
 
-# 構成②：Bスコア上位2車＋◎（A）
+# 構成②：対抗ラインスコア上位2–◎
 if len(b_line) >= 2:
     b_df = df[df["車番"].isin(b_line)].copy()
     b_df["構成評価"] = (
@@ -519,16 +520,15 @@ if len(b_line) >= 2:
         b_df["ライン補正"] * 0.4 +
         b_df["グループ補正"] * 0.2
     )
-    b_top2 = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:3])
-    for b1, b2 in combinations(b_top2, 2):
+    b_sorted = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:3])
+    for b1, b2 in combinations(b_sorted, 2):
         kumi = tuple(sorted([anchor, b1, b2]))
         if kumi not in kumi_awase["構成②"]:
             kumi_awase["構成②"].append(kumi)
             selection_reason["構成②"].append(f"B({b1},{b2})–◎({anchor})")
 
-# 構成③：◎–A上位2車–Aライン残り（全組合せ）
-a_line_filtered = [a for a in a_line if a != anchor]
-if len(a_line_filtered) >= 2:
+# 構成③：◎–A上位2–Aライン残り
+if len(a_line_filtered) >= 3:
     a_df = df[df["車番"].isin(a_line_filtered)].copy()
     a_df["構成評価"] = (
         a_df["着順補正"] * 0.8 +
@@ -541,11 +541,11 @@ if len(a_line_filtered) >= 2:
     remaining = [a for a in a_sorted[2:]]
     for rem in remaining:
         kumi = tuple(sorted([anchor, top2[0], rem]))
-        if len(kumi) == 3 and kumi not in kumi_awase["構成③"]:
+        if kumi not in kumi_awase["構成③"]:
             kumi_awase["構成③"].append(kumi)
             selection_reason["構成③"].append(f"◎({anchor})–A上位2({top2[0]},{top2[1]})–A残り({rem})")
 
-# --- 最終出力（構成順に並べる） ---
+# --- 最終出力 ---
 final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
 selection_reason_flat = selection_reason["構成①"] + selection_reason["構成②"] + selection_reason["構成③"]
 
