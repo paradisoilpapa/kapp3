@@ -519,7 +519,7 @@ if len(b_line) >= 2:
             kumi_awase["構成②"].append(kumi)
             selection_reason["構成②"].append(f"B({b1},{b2})–◎({anchor})")
 
-# 構成③：◎–A上位2–Aライン残り全てとの組合せ
+# 構成③：◎–A上位2–Aライン残り全てとの組合せ（2名分）
 if len(a_line_filtered) >= 3:
     a_df = df[df["車番"].isin(a_line_filtered)].copy()
     a_df["構成評価"] = (
