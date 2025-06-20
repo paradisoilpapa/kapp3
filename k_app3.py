@@ -492,9 +492,10 @@ for i in range(1, 3):
         tsubushi_line_key = line_k
         break
 
-# 漁夫ライン
-gyofu_keys = [k for k in line_def if k not in [main_line_key, tsubushi_line_key]]
+# 漁夫ライン（単騎も別ラインとして正しく扱う）
+gyofu_keys = [k for k in line_def.keys() if k not in [main_line_key, tsubushi_line_key]]
 
+# ライン分け
 a_line = main_line
 b_line = line_def.get(tsubushi_line_key, [])
 c_line = []
@@ -518,7 +519,7 @@ if len(a_others) >= 1 and len(c_line) >= 2:
             kumi = tuple(sorted([anchor, a, c]))
             if kumi not in kumi_awase:
                 kumi_awase.add(kumi)
-                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命ライン={main_line_key}, 漁夫ライン={k}：本命＋漁夫構成")
+                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
                 used_c_set.add(c)
                 break
         if len(used_c_set) >= 2:
@@ -533,7 +534,7 @@ if len(b_line) >= 2:
             kumi = tuple(sorted([b1, b2, a]))
             if kumi not in kumi_awase:
                 kumi_awase.add(kumi)
-                selection_reason.append(f"B({b1},{b2})–A({a})：Bライン={tsubushi_line_key}, 本命ライン={main_line_key}：潰れ残り保険")
+                selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
                 used_b_combos += 1
                 break
         if used_b_combos >= 2:
@@ -547,18 +548,22 @@ if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
     kumi = tuple(sorted([c, a, b]))
     if kumi not in kumi_awase:
         kumi_awase.add(kumi)
-        selection_reason.append(f"C({c})–A({a})–B({b})：漁夫ライン={k}, 本命ライン={main_line_key}, 潰しライン={tsubushi_line_key}：荒れ展開対応")
+        selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
 
 # --- 最終出力 ---
 final_candidates = list(sorted(kumi_awase))[:5]
 selection_reason = selection_reason[:5]
 
-def show_final_output(reasons, candidates):
-    st.markdown("### 🎯 フォーメーション構成")
-    for reason in reasons:
-        st.markdown(f"- {reason}")
-    st.markdown("\n**▼ 組番一覧：**")
-    for i, kumi in enumerate(candidates, 1):
-        st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
+# ライン表示まとめ
+st.markdown("### 🔹 ライン定義")
+st.markdown(f"- 本命ライン（A）：{sorted(a_line)}")
+st.markdown(f"- 対抗ライン（B）：{sorted(b_line)}")
+st.markdown(f"- 漁夫の利ライン（C）：{sorted(c_line)}")
 
-show_final_output(selection_reason, final_candidates)
+# 表示
+st.markdown("### 🎯 フォーメーション構成")
+for reason in selection_reason:
+    st.markdown(f"- {reason}")
+for i, kumi in enumerate(final_candidates, 1):
+    st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
+
