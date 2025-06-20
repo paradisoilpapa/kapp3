@@ -538,19 +538,23 @@ if len(a_others) >= 1 and len(c_line) >= 1:
         if count >= 2:
             break
 
-# 構成②：B–B–A（中穴）→ 2点厳守
+# 構成②：B–B–A（中穴）→ Bスコア上位2組を使用、Aラインから添える
 if len(b_line) >= 2:
-    b_combos = list(combinations(b_line, 2))
-    used_b_combos = 0
+    b_df = df[df["車番"].isin(b_line)].copy()
+    b_df["構成評価"] = (
+        b_df["着順補正"] * 0.8 +
+        b_df["SB印補正"] * 1.2 +
+        b_df["ライン補正"] * 0.4 +
+        b_df["グループ補正"] * 0.2
+    )
+    b_top = list(b_df.sort_values(by="構成評価", ascending=False)["車番"][:3])
+    b_combos = list(combinations(b_top, 2))[:2]
     for b1, b2 in b_combos:
         for a in a_line:
             kumi = tuple(sorted([b1, b2, a]))
-            if used_b_combos >= 2:
-                break
             if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]:
                 kumi_awase["構成②"].append(kumi)
                 selection_reason["構成②"].append(f"B({b1},{b2})–A({a})：潰れ残り保険")
-                used_b_combos += 1
             break
 
 # 構成③：C–A–B（荒れ展開）→ 1点
