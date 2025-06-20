@@ -495,10 +495,10 @@ if len(a_others) >= 1 and len(c_group_members) >= 1:
             d["ライン補正"] * 0.4 +
             d["グループ補正"] * 0.2
         )
-    a_top2 = list(a_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
-    c_top2 = list(c_df.sort_values(by="構成評価", ascending=False)["車番"][:2])
-    for a in a_top2:
-        for c in c_top2:
+    a_top = list(a_df.sort_values(by="構成評価", ascending=False)["車番"])
+    c_top = list(c_df.sort_values(by="構成評価", ascending=False)["車番"])
+    for a in a_top:
+        for c in c_top:
             if a == c:
                 continue
             kumi = tuple(sorted([anchor, a, c]))
@@ -524,8 +524,8 @@ if len(b_line) >= 2 and len(a_line) >= 1:
                 selection_reason["構成②"].append(f"B({b_pair[0]},{b_pair[1]})–A({a})：対抗→本命構成")
 
 # --- 最終出力（構成順に並べる） ---
-final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"]
-selection_reason_flat = selection_reason["構成①"] + selection_reason["構成②"]
+final_candidates = [k for k in kumi_awase["構成①"] if anchor in k] + [k for k in kumi_awase["構成②"] if anchor in k]
+selection_reason_flat = [r for i, r in enumerate(selection_reason["構成①"]) if anchor in kumi_awase["構成①"][i]] + [r for i, r in enumerate(selection_reason["構成②"]) if anchor in kumi_awase["構成②"][i]]
 
 # ライン表示まとめ
 st.markdown("### 🔹 ライン定義")
