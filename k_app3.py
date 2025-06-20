@@ -465,18 +465,10 @@ solo_members = line_def_raw.get('単騎', [])
 for i, solo_car in enumerate(solo_members):
     line_def[f'単騎{i+1}'] = [solo_car]
 
-# --- ◎決定 ---
-df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
-top_score = df_sorted.iloc[0]["合計スコア"]
-df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
-df_top_range["構成評価"] = (
-    df_top_range["着順補正"] * 0.8 +
-    df_top_range["SB印補正"] * 1.2 +
-    df_top_range["ライン補正"] * 0.4 +
-    df_top_range["グループ補正"] * 0.2
-)
-anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0]
-anchor = int(anchor_row["車番"])
+# --- ◎決定（Aラインから選出） ---
+a_df = df[df["車番"].isin(a_line)].copy()
+a_df_sorted = a_df.sort_values(by="合計スコア", ascending=False)
+anchor = int(a_df_sorted.iloc[0]["車番"])
 
 # --- 三連複構成抽出 ---
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
