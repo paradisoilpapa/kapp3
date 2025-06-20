@@ -432,62 +432,6 @@ except NameError:
 import pandas as pd
 import streamlit as st
 
-# --- B回数列の統一 ---
-df.rename(columns={"バック": "B回数"}, inplace=True)
-b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
-if len(b_list) != len(df):
-    st.error("⚠ B回数の数が選手数と一致していません")
-    st.stop()
-df["B回数"] = b_list
-
-# --- ライン構成取得 ---
-line_def_raw = {
-    'A': extract_car_list(a_line),
-    'B': extract_car_list(b_line),
-    'C': extract_car_list(c_line),
-    'D': extract_car_list(d_line),
-    '単騎': extract_car_list(solo_line)
-}
-
-# 単騎が複数ある場合は分割して個別ライン扱いに変更
-line_def = {k: v for k, v in line_def_raw.items() if k != '単騎'}
-solo_members = line_def_raw.get('単騎', [])
-for i, solo_car in enumerate(solo_members):
-    line_def[f'単騎{i+1}'] = [solo_car]
-
-# --- 合計スコアで並び替え ---
-df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
-top_score = df_sorted.iloc[0]["合計スコア"]
-df_top_range = df[df["合計スコア"] >= top_score - 0.5].copy()
-df_top_range["構成評価"] = (
-    df_top_range["着順補正"] * 0.8 +
-    df_top_range["SB印補正"] * 1.2 +
-    df_top_range["ライン補正"] * 0.4 +
-    df_top_range["グループ補正"] * 0.2
-)
-anchor_row = df_top_range.sort_values(by="構成評価", ascending=False).iloc[0]
-anchor_index = int(anchor_row["車番"])
-
-# --- main_line 定義 ---
-def find_line(car_no):
-    for k, v in line_def.items():
-        if car_no in v:
-            return k
-    return None
-
-main_line_key = find_line(anchor_index)
-main_line_cars = line_def.get(main_line_key, [])
-
-# --- 潰しライン（スコア上位3から main_line を除いたライン） ---
-score_top3 = df_sorted.iloc[:3].copy()
-tsubushi_line_key = None
-for i in range(1, 3):
-    candidate = int(score_top3.iloc[i]["車番"])
-    line_k = find_line(candidate)
-    if line_k and line_k != main_line_key:
-        tsubushi_line_key = line_k
-        break
-
 from itertools import combinations
 import pandas as pd
 import streamlit as st
@@ -562,40 +506,48 @@ a_others = [a for a in a_line if a != anchor]
 kumi_awase = set()
 selection_reason = []
 
-# 構成①：◎–A–C（最大2点）
-if len(a_others) >= 1 and len(c_line) >= 1:
-    for a in a_others:
-        for c in c_line[:2]:
+# 構成①：◎–A–C（本命＋漁夫）→ 2点厳守
+used_c_set = set()
+if len(a_others) >= 1 and len(c_line) >= 2:
+    for c in c_line:
+        if c in used_c_set:
+            continue
+        for a in a_others:
+            if a == c:
+                continue
             kumi = tuple(sorted([anchor, a, c]))
-            kumi_awase.add(kumi)
-            selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
+            if kumi not in kumi_awase:
+                kumi_awase.add(kumi)
+                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
+                used_c_set.add(c)
+                break
+        if len(used_c_set) >= 2:
+            break
 
-# 構成②：B–B–A（最大2点）
+# 構成②：B–B–A（中穴）→ 2点厳守
 if len(b_line) >= 2:
     b_combos = list(combinations(b_line, 2))
+    used_b_combos = 0
     for b1, b2 in b_combos:
-        for a in a_line[:2]:
+        for a in a_line:
             kumi = tuple(sorted([b1, b2, a]))
-            kumi_awase.add(kumi)
-            selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
+            if kumi not in kumi_awase:
+                kumi_awase.add(kumi)
+                selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
+                used_b_combos += 1
+                break
+        if used_b_combos >= 2:
+            break
 
-# 構成③：C–A–B（1点）
+# 構成③：C–A–B（荒れ展開）→ 1点
 if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
     c = c_line[0]
     a = a_line[0] if a_line[0] != anchor else (a_line[1] if len(a_line) > 1 else anchor)
     b = b_line[0]
     kumi = tuple(sorted([c, a, b]))
-    kumi_awase.add(kumi)
-    selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
-
-# 保険構成：AラインBOX
-if len(kumi_awase) < 5 and len(a_line) >= 3:
-    a_combos = list(combinations(a_line, 3))
-    for combo in a_combos:
-        kumi_awase.add(tuple(sorted(combo)))
-        selection_reason.append(f"A({combo[0]},{combo[1]},{combo[2]})：保険AラインBOX")
-        if len(kumi_awase) >= 5:
-            break
+    if kumi not in kumi_awase:
+        kumi_awase.add(kumi)
+        selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
 
 # --- 最終出力 ---
 final_candidates = list(sorted(kumi_awase))[:5]
