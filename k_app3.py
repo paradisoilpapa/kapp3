@@ -503,8 +503,8 @@ for k in gyofu_keys:
 
 # --- 三連複構成抽出 ---
 a_others = [a for a in a_line if a != anchor]
-kumi_awase = set()
-selection_reason = []
+kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
+selection_reason = {"構成①": [], "構成②": [], "構成③": []}
 
 # 構成①：◎–A–C（本命＋漁夫）→ 最大2点、スコア優先で構成
 if len(a_others) >= 1 and len(c_line) >= 1:
@@ -532,10 +532,9 @@ if len(a_others) >= 1 and len(c_line) >= 1:
             if a == c:
                 continue
             kumi = tuple(sorted([anchor, a, c]))
-            if kumi not in kumi_awase:
-                kumi_awase.add(kumi)
-                selection_reason.append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
-                count += 1
+            kumi_awase["構成①"].append(kumi)
+            selection_reason["構成①"].append(f"◎({anchor})–A({a})–C({c})：本命＋漁夫構成")
+            count += 1
         if count >= 2:
             break
 
@@ -546,12 +545,12 @@ if len(b_line) >= 2:
     for b1, b2 in b_combos:
         for a in a_line:
             kumi = tuple(sorted([b1, b2, a]))
-            if kumi not in kumi_awase:
-                kumi_awase.add(kumi)
-                selection_reason.append(f"B({b1},{b2})–A({a})：潰れ残り保険")
-                used_b_combos += 1
+            if used_b_combos >= 2:
                 break
-        if used_b_combos >= 2:
+            if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]:
+                kumi_awase["構成②"].append(kumi)
+                selection_reason["構成②"].append(f"B({b1},{b2})–A({a})：潰れ残り保険")
+                used_b_combos += 1
             break
 
 # 構成③：C–A–B（荒れ展開）→ 1点
@@ -560,13 +559,13 @@ if len(c_line) >= 1 and len(a_line) >= 1 and len(b_line) >= 1:
     a = a_line[0] if a_line[0] != anchor else (a_line[1] if len(a_line) > 1 else anchor)
     b = b_line[0]
     kumi = tuple(sorted([c, a, b]))
-    if kumi not in kumi_awase:
-        kumi_awase.add(kumi)
-        selection_reason.append(f"C({c})–A({a})–B({b})：荒れ展開対応")
+    if kumi not in kumi_awase["構成①"] + kumi_awase["構成②"]:
+        kumi_awase["構成③"].append(kumi)
+        selection_reason["構成③"].append(f"C({c})–A({a})–B({b})：荒れ展開対応")
 
-# --- 最終出力 ---
-final_candidates = list(sorted(kumi_awase))[:5]
-selection_reason = selection_reason[:5]
+# --- 最終出力（構成順に並べる） ---
+final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
+selection_reason_flat = selection_reason["構成①"] + selection_reason["構成②"] + selection_reason["構成③"]
 
 # ライン表示まとめ
 st.markdown("### 🔹 ライン定義")
@@ -576,7 +575,7 @@ st.markdown(f"- 漁夫の利ライン（C）：{sorted(c_line)}")
 
 # 表示
 st.markdown("### 🎯 フォーメーション構成")
-for reason in selection_reason:
+for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
     st.markdown(f"{i}. **{kumi[0]} - {kumi[1]} - {kumi[2]}**")
