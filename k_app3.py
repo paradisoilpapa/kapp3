@@ -532,7 +532,7 @@ subset_scores = [row for row in final_score_parts if row[0] in target_car_number
 
 # --- スコア順で並べて中央（2番目）を◎に ---
 subset_scores_sorted = sorted(subset_scores, key=lambda x: x[-1], reverse=True)
-anchor_car = subset_scores_sorted[1][0]  # ◎決定
+anchor_car = subset_scores_sorted[1][0]  # ◎決定（得点2〜4位内でスコア中位）
 
 # --- ◎の所属ラインを本命ライン（A）として定義 ---
 anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
@@ -566,8 +566,7 @@ anchor_score_sorted = sorted(
     key=lambda x: x[-1],
     reverse=True
 )
-anchor_car = anchor_score_sorted[0][0]  # 念のため再定義
-anchor_others = [row[0] for row in anchor_score_sorted[1:]]
+anchor_others = [row[0] for row in anchor_score_sorted if row[0] != anchor_car]
 
 # --- パターン①（◎-◎ライン-漁夫）構成 ---
 pattern_1 = [
@@ -577,12 +576,13 @@ pattern_1 = [
     if len(set([anchor_car, x, y])) == 3
 ]
 
-# --- パターン②（対抗BOX-対抗BOX-◎）構成 ---
+# anchor（◎）を除いた対抗ラインの車番で構成
+b_only = [car for car in b_cars if car != anchor_car]
+
 pattern_2 = [
     tuple(sorted([x, y, anchor_car]))
-    for i, x in enumerate(b_cars)
-    for y in b_cars[i+1:]
-    if len(set([x, y, anchor_car])) == 3
+    for i, x in enumerate(b_only)
+    for y in b_only[i+1:]
 ]
 
 # --- 重複除去・ソート ---
