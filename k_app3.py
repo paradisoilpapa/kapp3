@@ -77,62 +77,84 @@ keirin_data = {
 
 keirin_data = {"函館": {"bank_angle": 30.6, "straight_length": 51.3, "bank_length": 400}, "手入力": {"bank_angle": 30.0, "straight_length": 52.0, "bank_length": 400}}
 
-# --- 通常入力 ---
-selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
-selected_info = keirin_data[selected_track]
+# --- 一括フォーム（元構成に復旧） ---
+with st.form("score_form"):
+    st.subheader("【バンク・風条件＋選手データ入力】")
 
-wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
-straight_length = st.number_input("みなし直線(m)", value=float(selected_info["straight_length"]))
-bank_angle = st.number_input("バンク角(°)", value=float(selected_info["bank_angle"]))
-bank_length = st.number_input("バンク周長(m)", value=float(selected_info["bank_length"]))
-laps = st.number_input("周回数", min_value=1, max_value=10, value=4)
+    # ▼ 競輪場＋バンク条件
+    selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
+    selected_info = keirin_data[selected_track]
+    wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
+    straight_length = st.number_input("みなし直線(m)", min_value=30.0, max_value=80.0, step=0.1, value=float(selected_info["straight_length"]))
+    bank_angle = st.number_input("バンク角(°)", min_value=20.0, max_value=45.0, step=0.1, value=float(selected_info["bank_angle"]))
+    bank_length = st.number_input("バンク周長(m)", min_value=300.0, max_value=500.0, step=0.1, value=float(selected_info["bank_length"]))
+    laps = st.number_input("周回数（通常は4、高松などは5）", min_value=1, max_value=10, value=4, step=1)
 
-st.markdown("▼ 位置入力（逃・両・追）")
-kakushitsu_keys = ['逃', '両', '追']
-car_to_kakushitsu = {}
-cols = st.columns(3)
-for i, k in enumerate(kakushitsu_keys):
-    with cols[i]:
-        val = st.text_input(f"{k}（脚質）", key=f"kaku_{k}")
+    # ▼ 位置入力（逃・両・追）
+    st.subheader("▼ 位置入力（逃＝先頭・両＝番手・追＝３番手以降&単騎：車番を半角数字で入力）")
+    kakushitsu_keys = ['逃', '両', '追']
+    kakushitsu_inputs = {}
+    cols = st.columns(3)
+    for i, k in enumerate(kakushitsu_keys):
+        with cols[i]:
+            st.markdown(f"**{k}**")
+            kakushitsu_inputs[k] = st.text_input("", key=f"kaku_{k}", max_chars=14)
+
+    car_to_kakushitsu = {}
+    for k, val in kakushitsu_inputs.items():
         for c in val:
             if c.isdigit():
-                car_to_kakushitsu[int(c)] = k
+                n = int(c)
+                if 1 <= n <= 9:
+                    car_to_kakushitsu[n] = k
 
-st.markdown("▼ 前々走・前走の着順入力（1〜9着 または 0＝落車）")
-chaku_inputs = []
-for i in range(7):
-    cols = st.columns(2)
-    chaku1 = cols[0].text_input(f"{i+1}番【前々走】", key=f"chaku1_{i}")
-    chaku2 = cols[1].text_input(f"{i+1}番【前走】", key=f"chaku2_{i}")
-    chaku_inputs.append([chaku1, chaku2])
+    st.subheader("▼ 前々走・前走の着順入力（1〜9着 または 0＝落車）")
+    chaku_inputs = []
+    for i in range(7):
+        col1, col2 = st.columns(2)
+        with col1:
+            chaku1 = st.text_input(f"{i+1}番【前々走】", value="", key=f"chaku1_{i}")
+        with col2:
+            chaku2 = st.text_input(f"{i+1}番【前走】", value="", key=f"chaku2_{i}")
+        chaku_inputs.append([chaku1, chaku2])
 
-st.markdown("▼ 競争得点・隊列・S/B回数入力")
-rating = []
-tairetsu = []
-for i in range(7):
-    cols = st.columns(4)
-    rating.append(cols[0].number_input(f"{i+1}番得点", value=55.0, key=f"rate_{i}"))
-    tairetsu.append(cols[1].text_input(f"{i+1}番隊列順位", key=f"tai_{i}"))
-    cols[2].number_input("S回数", min_value=0, max_value=99, value=0, key=f"s_point_{i+1}")
-    cols[3].number_input("B回数", min_value=0, max_value=99, value=0, key=f"b_point_{i+1}")
+    st.subheader("▼ 競争得点入力")
+    rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
 
-# --- フォーム：ライン構成と実行ボタン ---
-with st.form("score_form"):
-    st.markdown("▼ ライン構成入力（最大7ライン）")
-    line_input = {}
-    for label in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
-        line_input[label] = st.text_input(f"{label}ライン（例：13）", key=f"line_{label}")
+    st.subheader("▼ 予想隊列入力（数字、欠の場合は空欄）")
+    tairetsu = [st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}") for i in range(7)]
+
+    st.subheader("▼ S・B 入力（各選手のS・B回数を入力）")
+    for i in range(7):
+        st.markdown(f"**{i+1}番**")
+        st.number_input("S回数", min_value=0, max_value=99, value=0, step=1, key=f"s_point_{i+1}")
+        st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
+
+    st.subheader("▼ ライン構成入力（A〜Dライン＋単騎）")
+    a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
+    b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
+    c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
+    d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
+    solo_line = st.text_input("単騎枠（例：9）", key="solo_line", max_chars=9)
+
     submitted = st.form_submit_button("スコア計算実行")
 
-# --- 関数群 ---
-def extract_car_list(s):
-    return [int(c) for c in s if c.isdigit()]
+# --- ライン構成入力に必要な補助関数 ---
+def extract_car_list(input_str):
+    return [int(c) for c in input_str if c.isdigit()]
 
 def build_line_position_map():
-    line_def = {k: extract_car_list(v) for k, v in line_input.items()}
-    position_map = {car: (label, i+1) for label, cars in line_def.items() for i, car in enumerate(cars)}
-    return position_map, line_def
+    result = {}
+    for line, name in zip([a_line, b_line, c_line, d_line, solo_line], ['A', 'B', 'C', 'D', 'S']):
+        cars = extract_car_list(line)
+        for i, car in enumerate(cars):
+            if name == 'S':
+                result[car] = 0
+            else:
+                result[car] = i + 1
+    return result
 
+# --- スコア補正関数 ---
 def score_from_tenscore_list(tens):
     df = pd.DataFrame({"得点": tens})
     df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
@@ -142,11 +164,11 @@ def score_from_tenscore_list(tens):
 
 # --- 実行処理 ---
 if submitted:
-    line_position_map, line_def = build_line_position_map()
+    line_position_map = build_line_position_map()
     st.write("ライン構成マップ:", line_position_map)
-    st.write("ライン定義:", line_def)
     scores = score_from_tenscore_list(rating)
     st.write("補正スコア:", scores)
+
 
 
 
