@@ -6,26 +6,26 @@ st.set_page_config(page_title="ライン競輪スコア計算（完全統一版�
 
 st.title("⭐ ライン競輪スコア計算（7車ライン＋欠番対応）⭐")
 
+# --- 風向補正係数 ---
 wind_coefficients = {
-    "左上": -0.03,   # ホーム寄りからの風 → 差し有利（逃げやや不利）
-    "上":   -0.05,   # バック向かい風 → 逃げ最大不利
-    "右上": -0.035,   # 差しやや有利
-
-    "左":   +0.05,   # ホーム向かい風 → 差し不利、逃げ有利
-    "右":   -0.05,   # バック追い風 → 差し不利、逃げ有利
-
-    "左下": +0.035,   # ゴール寄り追い風 → 差しやや有利
-    "下":   +0.05,   # ゴール強追い風 → 差し最大有利（逃げ最大不利）
-    "右下": +0.035    # 差しやや有利
+    "左上": -0.03,
+    "上":   -0.05,
+    "右上": -0.035,
+    "左":   +0.05,
+    "右":   -0.05,
+    "左下": +0.035,
+    "下":   +0.05,
+    "右下": +0.035
 }
+
+# --- ライン順による影響倍率（先頭〜4番手、単騎） ---
 position_multipliers = {
-    0: 0.3,  # 単騎
+    0: 0.3,   # 単騎
     1: 0.32,  # 先頭
     2: 0.3,
     3: 0.25,
-    4: 0.2  # 4番手
+    4: 0.2
 }
-
 
 # --- 基本スコア（脚質ごとの基準値） ---
 base_score = {'逃': 4.7, '両': 4.8, '追': 5.0}
@@ -33,6 +33,22 @@ base_score = {'逃': 4.7, '両': 4.8, '追': 5.0}
 # --- 状態保持 ---
 if "selected_wind" not in st.session_state:
     st.session_state.selected_wind = "無風"
+
+# --- 風＋ライン順に応じた補正スコア関数 ---
+def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_length, line_order):
+    wind_adj = wind_coefficients.get(wind_direction, 0.0)
+    pos_multi = position_multipliers.get(line_order, 0.3)
+
+    if wind_direction == "無風" or wind_speed == 0:
+        return 0.0
+
+    if kakushitsu == "逃":
+        return round(wind_speed * wind_adj * 1.0 * pos_multi, 3)
+    elif kakushitsu == "両":
+        return round(wind_speed * wind_adj * 0.7 * pos_multi, 3)
+    elif kakushitsu == "追":
+        return round(wind_speed * wind_adj * 0.4 * pos_multi, 3)
+    return round(wind_speed * wind_adj * 0.5 * pos_multi, 3)
 
 # --- バンク・風条件セクション ---
 st.header("【バンク・風条件】")
@@ -76,6 +92,7 @@ with cols_bot[2]:
         st.session_state.selected_wind = "右下"
 
 st.subheader(f"✅ 選択中の風向き：{st.session_state.selected_wind}")
+
 
 # ▼ 競輪場選択による自動入力
 keirin_data = {
