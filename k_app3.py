@@ -198,16 +198,6 @@ for i in range(7):
     b_val = st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
 
 
-# --- ライン構成入力（最大7ライン対応：A〜G） ---
-st.subheader("▼ ライン構成入力（最大7ライン）")
-a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
-b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
-c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
-d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
-e_line = st.text_input("Eライン（例：9）", key="e_line", max_chars=9)
-f_line = st.text_input("Fライン（例：24）", key="f_line", max_chars=9)
-g_line = st.text_input("Gライン（例：57）", key="g_line", max_chars=9)
-
 # --- 補助関数 ---
 def extract_car_list(input_str):
     return [int(c) for c in input_str if c.isdigit()]
@@ -246,14 +236,23 @@ def score_from_tenscore_list(tenscore_list):
     return df["最終補正値"].tolist()
 
 # --- スコア計算トリガー ---
-st.subheader("▼ スコア計算")
-if st.button("スコア計算実行"):
+with st.form(key="score_form"):
+    st.subheader("▼ ライン構成入力（最大7ライン）")
+    a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
+    b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
+    c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
+    d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
+    e_line = st.text_input("Eライン（例：9）", key="e_line", max_chars=9)
+    f_line = st.text_input("Fライン（例：24）", key="f_line", max_chars=9)
+    g_line = st.text_input("Gライン（例：57）", key="g_line", max_chars=9)
+
+    tenscore_list = [st.number_input(f"{i+1}番の得点", value=55.0, step=0.1, key=f"score_{i}") for i in range(9)]
+    submitted = st.form_submit_button("スコア計算実行")
+
+if submitted:
     line_position_map, line_def = build_line_position_map()
     st.write("ライン構成マップ:", line_position_map)
     st.write("ライン定義:", line_def)
-    
-    # 例: 得点入力
-    tenscore_list = [st.number_input(f"{i+1}番の得点", value=55.0, step=0.1, key=f"score_{i}") for i in range(9)]
     corrected_scores = score_from_tenscore_list(tenscore_list)
     st.write("補正後スコア：", corrected_scores)
 
