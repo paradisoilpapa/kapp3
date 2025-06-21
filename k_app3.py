@@ -76,50 +76,55 @@ keirin_data = {
 
 
 keirin_data = {"函館": {"bank_angle": 30.6, "straight_length": 51.3, "bank_length": 400}, "手入力": {"bank_angle": 30.0, "straight_length": 52.0, "bank_length": 400}}
+
+# --- 通常入力 ---
+selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
+selected_info = keirin_data[selected_track]
+
+wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
+straight_length = st.number_input("みなし直線(m)", value=float(selected_info["straight_length"]))
+bank_angle = st.number_input("バンク角(°)", value=float(selected_info["bank_angle"]))
+bank_length = st.number_input("バンク周長(m)", value=float(selected_info["bank_length"]))
+laps = st.number_input("周回数", min_value=1, max_value=10, value=4)
+
+st.markdown("▼ 位置入力（逃・両・追）")
+kakushitsu_keys = ['逃', '両', '追']
+car_to_kakushitsu = {}
+cols = st.columns(3)
+for i, k in enumerate(kakushitsu_keys):
+    with cols[i]:
+        val = st.text_input(f"{k}（脚質）", key=f"kaku_{k}")
+        for c in val:
+            if c.isdigit():
+                car_to_kakushitsu[int(c)] = k
+
+st.markdown("▼ 前々走・前走の着順入力（1〜9着 または 0＝落車）")
+chaku_inputs = []
+for i in range(7):
+    cols = st.columns(2)
+    chaku1 = cols[0].text_input(f"{i+1}番【前々走】", key=f"chaku1_{i}")
+    chaku2 = cols[1].text_input(f"{i+1}番【前走】", key=f"chaku2_{i}")
+    chaku_inputs.append([chaku1, chaku2])
+
+st.markdown("▼ 競争得点・隊列・S/B回数入力")
+rating = []
+tairetsu = []
+for i in range(7):
+    cols = st.columns(4)
+    rating.append(cols[0].number_input(f"{i+1}番得点", value=55.0, key=f"rate_{i}"))
+    tairetsu.append(cols[1].text_input(f"{i+1}番隊列順位", key=f"tai_{i}"))
+    cols[2].number_input("S回数", min_value=0, max_value=99, value=0, key=f"s_point_{i+1}")
+    cols[3].number_input("B回数", min_value=0, max_value=99, value=0, key=f"b_point_{i+1}")
+
+# --- フォーム：ライン構成と実行ボタン ---
 with st.form("score_form"):
-    st.subheader("【バンク・風条件＋選手データ入力】")
-
-    selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
-    selected_info = keirin_data[selected_track]
-
-    wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
-    straight_length = st.number_input("みなし直線(m)", value=float(selected_info["straight_length"]))
-    bank_angle = st.number_input("バンク角(°)", value=float(selected_info["bank_angle"]))
-    bank_length = st.number_input("バンク周長(m)", value=float(selected_info["bank_length"]))
-    laps = st.number_input("周回数", min_value=1, max_value=10, value=4)
-
-    st.markdown("▼ 位置入力（逃・両・追）")
-    kakushitsu_keys = ['逃', '両', '追']
-    car_to_kakushitsu = {}
-    cols = st.columns(3)
-    for i, k in enumerate(kakushitsu_keys):
-        with cols[i]:
-            val = st.text_input(f"{k}（脚質）", key=f"kaku_{k}")
-            for c in val:
-                if c.isdigit():
-                    car_to_kakushitsu[int(c)] = k
-
-    chaku_inputs = []
-    rating = []
-    tairetsu = []
-    for i in range(7):
-        col1, col2 = st.columns(2)
-        chaku1 = col1.text_input(f"{i+1}番【前々走】", key=f"chaku1_{i}")
-        chaku2 = col2.text_input(f"{i+1}番【前走】", key=f"chaku2_{i}")
-        chaku_inputs.append([chaku1, chaku2])
-
-        rating.append(st.number_input(f"{i+1}番得点", value=55.0, key=f"rate_{i}"))
-        tairetsu.append(st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}"))
-        st.number_input("S回数", min_value=0, max_value=99, value=0, key=f"s_point_{i+1}")
-        st.number_input("B回数", min_value=0, max_value=99, value=0, key=f"b_point_{i+1}")
-
     st.markdown("▼ ライン構成入力（最大7ライン）")
     line_input = {}
     for label in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
         line_input[label] = st.text_input(f"{label}ライン（例：13）", key=f"line_{label}")
-
     submitted = st.form_submit_button("スコア計算実行")
 
+# --- 関数群 ---
 def extract_car_list(s):
     return [int(c) for c in s if c.isdigit()]
 
@@ -135,12 +140,14 @@ def score_from_tenscore_list(tens):
     df["補正"] = df.apply(lambda r: round(abs(baseline - r["得点"]) * 0.03, 3) if r["順位"] in [2, 3, 4] else 0.0, axis=1)
     return df["補正"].tolist()
 
+# --- 実行処理 ---
 if submitted:
     line_position_map, line_def = build_line_position_map()
     st.write("ライン構成マップ:", line_position_map)
     st.write("ライン定義:", line_def)
     scores = score_from_tenscore_list(rating)
     st.write("補正スコア:", scores)
+
 
 
 # --- スコア計算トリガー ---
