@@ -448,7 +448,7 @@ df["B回数"] = b_list
 rating = [st.session_state.get(f"rate_{i}", 55.0) for i in range(7)]
 df["得点"] = rating
 
-# --- ライン構成取得（UI入力を優先） ---
+# --- ライン構成取得 ---
 a_line = extract_car_list(a_line)
 b_line = extract_car_list(b_line)
 c_line = extract_car_list(c_line)
@@ -463,7 +463,7 @@ line_def_raw = {
     '単騎': solo_line
 }
 
-# 単騎が複数ある場合は個別化
+# 単騎を個別ライン化
 line_def = {k: v for k, v in line_def_raw.items() if k != '単騎'}
 solo_members = line_def_raw.get('単騎', [])
 for i, solo_car in enumerate(solo_members):
@@ -485,59 +485,93 @@ for label, members in line_def.items():
         main_line_found = True
         break
 if not main_line_found:
-    a_line = [anchor]
+    a_line = [anchor]  # 単騎扱い
+
+# --- 単騎◎判定 ---
+is_anchor_solo = len(a_line) == 1 and a_line[0] == anchor
+
+# --- ライングループ抽出（2車以上） ---
+line_groups = []
+for label, members in line_def.items():
+    if len(members) >= 2:
+        line_groups.append(members)
 
 # --- 三連複構成抽出 ---
-kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
-selection_reason = {"構成①": [], "構成②": [], "構成③": []}
+kumi_awase = {"構成①": [], "構成②": [], "構成③": [], "漁夫構成": []}
+selection_reason = {"構成①": [], "構成②": [], "構成③": [], "漁夫構成": []}
 
-# 構成①：◎–A–Cグループ（A残り1＋Cグループ1）
+# --- Cグループ定義（for 通常構成） ---
 c_group = c_line + d_line + solo_members
-a_line_filtered = [a for a in a_line if a != anchor]
-if len(a_line_filtered) >= 1 and len(c_group) >= 1:
-    a_sorted = list(df[df["車番"].isin(a_line_filtered)].sort_values(by="合計スコア", ascending=False)["車番"])
-    c_sorted = list(df[df["車番"].isin(c_group)].sort_values(by="合計スコア", ascending=False)["車番"])
 
-    for a in a_sorted:
-        for c in c_sorted:
-            kumi = tuple(sorted([anchor, a, c]))
-            if kumi not in kumi_awase["構成①"]:
+df_car_scores = df.set_index("車番")
+
+if is_anchor_solo:
+    # --- 漁夫の利構成（ライン単位で2組） ---
+    rival_lines = [line for line in line_groups if anchor not in line]
+    if len(rival_lines) >= 2:
+        line_scores = []
+        for line in rival_lines:
+            score_sum = sum([df_car_scores.loc[x, "合計スコア"] for x in line])
+            line_scores.append((line, score_sum))
+        top2_lines = sorted(line_scores, key=lambda x: x[1], reverse=True)[:2]
+        top2_cars = []
+        for line, _ in top2_lines:
+            best = max(line, key=lambda x: df_car_scores.loc[x, "合計スコア"])
+            top2_cars.append(best)
+        kumi = tuple(sorted([anchor] + top2_cars))
+        kumi_awase["漁夫構成"].append(kumi)
+        selection_reason["漁夫構成"].append(f"◎({anchor})–漁夫の利ライン({top2_cars[0]},{top2_cars[1]})")
+else:
+    # --- 構成①：◎–A–C（A残り＋C） ---
+    a_line_filtered = [a for a in a_line if a != anchor]
+    if len(a_line_filtered) >= 1 and len(c_group) >= 1:
+        a_sorted = sorted(a_line_filtered, key=lambda x: df_car_scores.loc[x, "合計スコア"], reverse=True)
+        c_sorted = sorted(c_group, key=lambda x: df_car_scores.loc[x, "合計スコア"], reverse=True)
+        for a in a_sorted:
+            for c in c_sorted:
+                kumi = tuple(sorted([anchor, a, c]))
                 kumi_awase["構成①"].append(kumi)
                 selection_reason["構成①"].append(f"◎({anchor})–A({a})–C({c})")
 
-# 構成②：対抗ラインスコア上位2–◎
-if len(b_line) >= 2:
-    b_sorted = list(df[df["車番"].isin(b_line)].sort_values(by="合計スコア", ascending=False)["車番"][:3])
-    for b1, b2 in combinations(b_sorted, 2):
-        kumi = tuple(sorted([anchor, b1, b2]))
-        if kumi not in kumi_awase["構成②"]:
+    # --- 構成②：Bスコア上位2–◎ ---
+    if len(b_line) >= 2:
+        b_sorted = sorted(b_line, key=lambda x: df_car_scores.loc[x, "合計スコア"], reverse=True)[:3]
+        for b1, b2 in combinations(b_sorted, 2):
+            kumi = tuple(sorted([anchor, b1, b2]))
             kumi_awase["構成②"].append(kumi)
             selection_reason["構成②"].append(f"B({b1},{b2})–◎({anchor})")
 
-# 構成③：◎–A上位2–Aライン残り全てとの組合せ（2名分）
-if len(a_line_filtered) >= 3:
-    a_sorted = list(df[df["車番"].isin(a_line_filtered)].sort_values(by="合計スコア", ascending=False)["車番"])
-    top2 = a_sorted[:2]
-    remaining = [a for a in a_sorted if a not in top2]
-    for a1 in top2:
-        for rem in remaining:
-            kumi = tuple(sorted([anchor, a1, rem]))
-            if kumi not in kumi_awase["構成③"]:
+    # --- 構成③：◎–A上位2–A残り ---
+    if len(a_line_filtered) >= 3:
+        a_sorted = sorted(a_line_filtered, key=lambda x: df_car_scores.loc[x, "合計スコア"], reverse=True)
+        top2 = a_sorted[:2]
+        remaining = [a for a in a_sorted if a not in top2]
+        for a1 in top2:
+            for rem in remaining:
+                kumi = tuple(sorted([anchor, a1, rem]))
                 kumi_awase["構成③"].append(kumi)
                 selection_reason["構成③"].append(f"◎({anchor})–A上位({a1})–A残り({rem})")
 
-# --- 最終出力 ---
-final_candidates = kumi_awase["構成①"] + kumi_awase["構成②"] + kumi_awase["構成③"]
-selection_reason_flat = selection_reason["構成①"] + selection_reason["構成②"] + selection_reason["構成③"]
+# --- 出力部 ---
+final_candidates = (
+    kumi_awase["構成①"] +
+    kumi_awase["構成②"] +
+    kumi_awase["構成③"] +
+    kumi_awase["漁夫構成"]
+)
+selection_reason_flat = (
+    selection_reason["構成①"] +
+    selection_reason["構成②"] +
+    selection_reason["構成③"] +
+    selection_reason["漁夫構成"]
+)
 
-# ライン表示まとめ
 st.markdown("### 🔹 ライン定義")
 st.markdown(f"- 本命ライン（A）：{sorted(a_line)}")
 st.markdown(f"- 対抗ライン（B）：{sorted(b_line)}")
 st.markdown(f"- Cグループ（C以下の統合）：{sorted(c_group)}")
 
-# 表示
-st.markdown("### 🎯 フォーメーション構成")
+st.markdown("### 🌟 フォーメーション構成")
 for reason in selection_reason_flat:
     st.markdown(f"- {reason}")
 for i, kumi in enumerate(final_candidates, 1):
