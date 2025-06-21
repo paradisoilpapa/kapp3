@@ -4,17 +4,17 @@ import pandas as pd
 # --- ページ設定 ---
 st.set_page_config(page_title="ライン競輪スコア計算（完全統一版）", layout="wide")
 
-st.title("⭐ ライン競輪スコア計算（7車ライン＋欠番対応）⭐")
+st.title("⭐ ライン競車スコア計算（第7車ライン＋欠番対応）⭐")
 
 wind_coefficients = {
-    "左上": -0.03,   # ホーム寄りからの風 → 差し有利（逃げやや不利）
+    "左上": -0.03,   # ホーム復の風 → 差し有利（逃げやや不利）
     "上":   -0.05,   # バック向かい風 → 逃げ最大不利
     "右上": -0.035,   # 差しやや有利
 
     "左":   +0.05,   # ホーム向かい風 → 差し不利、逃げ有利
     "右":   -0.05,   # バック追い風 → 差し不利、逃げ有利
 
-    "左下": +0.035,   # ゴール寄り追い風 → 差しやや有利
+    "左下": +0.035,   # ゴール向き追い風 → 差しやや有利
     "下":   +0.05,   # ゴール強追い風 → 差し最大有利（逃げ最大不利）
     "右下": +0.035    # 差しやや有利
 }
@@ -26,7 +26,6 @@ position_multipliers = {
     4: 0.2  # 4番手
 }
 
-
 # --- 基本スコア（脚質ごとの基準値） ---
 base_score = {'逃': 4.7, '両': 4.8, '追': 5.0}
 
@@ -35,7 +34,7 @@ if "selected_wind" not in st.session_state:
     st.session_state.selected_wind = "無風"
 
 # --- バンク・風条件セクション ---
-st.header("【バンク・風条件】")
+st.header("［バンク・風条件］")
 
 cols_top = st.columns(3)
 cols_mid = st.columns(3)
@@ -57,7 +56,7 @@ with cols_mid[1]:
     st.markdown("""
     <div style='text-align:center; font-size:16px; line-height:1.6em;'>
         ↑<br>［上］<br>
-        ← 左　　　右 →<br>
+        ← 左：　　右 →<br>
         ［下］<br>↓<br>
         □ ホーム→（ ゴール）
     </div>
@@ -76,6 +75,7 @@ with cols_bot[2]:
         st.session_state.selected_wind = "右下"
 
 st.subheader(f"✅ 選択中の風向き：{st.session_state.selected_wind}")
+
 
 # ▼ 競輪場選択による自動入力
 keirin_data = {
