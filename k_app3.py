@@ -78,7 +78,7 @@ keirin_data = {
 keirin_data = {"函館": {"bank_angle": 30.6, "straight_length": 51.3, "bank_length": 400}, "手入力": {"bank_angle": 30.0, "straight_length": 52.0, "bank_length": 400}}
 
 # --- 一括フォーム（元構成に復旧） ---
-with st.form("score_form"):
+with st.form(key="score_form_unique"):
     st.subheader("【バンク・風条件＋選手データ入力】")
 
     # ▼ 競輪場＋バンク条件
