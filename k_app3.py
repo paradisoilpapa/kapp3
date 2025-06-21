@@ -432,6 +432,13 @@ def compute_group_bonus(score_parts, line_def):
 
     return bonus_map
 
+# ✅ 追加：車番に対するグループ補正値の取得関数
+def get_group_bonus(car_no, line_def, bonus_map):
+    for group, members in line_def.items():
+        if car_no in members:
+            return bonus_map.get(group, 0.0)
+    return 0.0
+
 
 # --- スコア計算 ---
 tenscore_score = score_from_tenscore_list(rating)
