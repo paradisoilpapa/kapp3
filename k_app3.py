@@ -510,61 +510,49 @@ except NameError:
 import pandas as pd
 import streamlit as st
 
-# --- B回数列の統一（バック → B回数）---
-df.rename(columns={"バック": "B回数"}, inplace=True)
+# --- ◎ライン・対抗・漁夫の利ラインによるフォーメ構成（一元化） ---
 
-# --- ユーザー入力されたB回数（バック回数）をdfへ格納 ---
-b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
-
-# --- 再発防止のチェック ---
-if len(b_list) != len(df):
-    st.error(f"⚠ B回数の入力数（{len(b_list)}）と選手数（{len(df)}）が一致していません。")
-    st.stop()
-
-# --- B回数をdfに格納 ---
-df["B回数"] = b_list
-
-# --- ◎（スコア1位）抽出 ---
-anchor_idx = df["合計スコア"].idxmax()
-anchor_row = df.loc[anchor_idx]
-anchor_index = int(anchor_row["車番"])
-anchor_line_value = anchor_row["グループ補正"]
-
-# --- ◎以外を抽出 ---
-others = df[df["車番"] != anchor_index].copy()
-
-# --- 個性補正の算出 ---
-others["個性補正"] = (
-    others["着順補正"] * 0.8 +
-    others["SB印補正"] * 1.2 +
-    others["ライン補正"] * 0.4 +
-    others["グループ補正"] * 0.2
+# ◎ラインからスコア順で取得
+anchor_score_sorted = sorted(
+    [row for row in final_score_parts if row[0] in lines[anchor_line_idx]],
+    key=lambda x: x[-1],
+    reverse=True
 )
+anchor_car = anchor_score_sorted[0][0]
+anchor_others = [row[0] for row in anchor_score_sorted[1:]]
 
-# --- ラインから1車 ---
-same_line_df = others[others["グループ補正"] == anchor_line_value]
-line_pick = same_line_df.loc[same_line_df["個性補正"].idxmax(), "車番"] if not same_line_df.empty else None
+# 対抗ライン・漁夫ライン
+b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
+c_cars = [car for idx, role in line_roles.items() if role == "C" for car in lines[idx]]
 
-# --- B回数2以下から1車（ライン除外） ---
-others_for_b = others.copy()
-excluded_cars = set()
-if line_pick:
-    excluded_cars.add(line_pick)
-low_B_df = others_for_b[(~others_for_b["車番"].isin(excluded_cars)) & (others_for_b["B回数"] <= 2)]
-low_B_pick = low_B_df.loc[low_B_df["個性補正"].idxmax(), "車番"] if not low_B_df.empty else None
-if low_B_pick:
-    excluded_cars.add(low_B_pick)
+# --- パターン①：◎厚め（1-23-2347）
+pattern_1 = [
+    tuple(sorted([anchor_car, x, y]))
+    for x in anchor_others[:2]
+    for y in anchor_others[:3] + c_cars
+    if len(set([anchor_car, x, y])) == 3
+]
 
-# --- B回数3以上から1車（さらに除外） ---
-high_B_df = others[(~others["車番"].isin(excluded_cars)) & (others["B回数"] >= 3)]
-high_B_pick = high_B_df.loc[high_B_df["個性補正"].idxmax(), "車番"] if not high_B_df.empty else None
+# --- パターン②：対抗厚め（56-56-1）
+pattern_2 = [
+    tuple(sorted([x, y, anchor_car]))
+    for i, x in enumerate(b_cars)
+    for y in b_cars[i+1:]
+]
 
-# --- 出力構成の表示 ---
-final_candidates = [anchor_index] + [x for x in [line_pick, low_B_pick, high_B_pick] if x is not None]
+# --- 重複除去・ソート
+pattern_1 = sorted(set(pattern_1))
+pattern_2 = sorted(set(pattern_2))
 
-st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"◎（合計スコア1位）：`{anchor_index}`")
-st.markdown(f"ラインから1車：`{line_pick if line_pick else '該当なし'}`")
-st.markdown(f"B回数2以下から1車：`{low_B_pick if low_B_pick else '該当なし'}`")
-st.markdown(f"B回数3以上から1車：`{high_B_pick if high_B_pick else '該当なし'}`")
-st.markdown(f"👉 **三連複4点：BOX（{', '.join(map(str, final_candidates))}）**")
+# --- 表示：整形済（Streamlit & note共用）
+st.markdown("### 🎯 フォーメーション構成（ライン重視ロジック）")
+st.markdown(f"◎：{anchor_car}（ライン：{[row[0] for row in anchor_score_sorted]}）")
+st.markdown(f"対抗ライン：{b_cars} ／ 漁夫の利：{c_cars}")
+
+st.markdown("#### ▶ パターン①：1-23-2347（本線）")
+for p in pattern_1:
+    st.write(f"BOX {p}")
+
+st.markdown("#### ▶ パターン②：56-56-1（対抗押さえ）")
+for p in pattern_2:
+    st.write(f"BOX {p}")
