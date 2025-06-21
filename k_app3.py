@@ -282,24 +282,22 @@ if st.button("スコア計算実行"):
         return round(total, 2)
 
 
-# --- 着順補正スコア計算関数 ---
-def convert_chaku_to_score(values):
-    scores = []
-    for i, v in enumerate(values):
-        v = v.strip()
-        try:
-            chaku = int(v)
-            if 1 <= chaku <= 9:
-                score = (10 - chaku) / 9
-                if i == 1:  # 前々走のみ補正
-                    score *= 0.35
-                scores.append(score)
-        except ValueError:
-            continue
-    if not scores:
-        return None
-    return round(sum(scores) / len(scores), 2)
-
+    def convert_chaku_to_score(values):
+        scores = []
+        for i, v in enumerate(values):  # i=0: 前走, i=1: 前々走
+            v = v.strip()
+            try:
+                chaku = int(v)
+                if 1 <= chaku <= 9:
+                    score = (10 - chaku) / 9
+                    if i == 1:  # 前々走のみ補正
+                        score *= 0.35
+                    scores.append(score)
+            except ValueError:
+                continue
+        if not scores:
+            return None
+        return round(sum(scores) / len(scores), 2)
 
 
     def lap_adjust(kaku, laps):
