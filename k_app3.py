@@ -3,78 +3,28 @@ import pandas as pd
 
 # --- ページ設定 ---
 st.set_page_config(page_title="ライン競輪スコア計算（完全統一版）", layout="wide")
-
 st.title("⭐ ライン競輪スコア計算（7車ライン＋欠番対応）⭐")
 
+# --- 定数定義 ---
 wind_coefficients = {
-    "左上": -0.03,   # ホーム寄りからの風 → 差し有利（逃げやや不利）
-    "上":   -0.05,   # バック向かい風 → 逃げ最大不利
-    "右上": -0.035,   # 差しやや有利
-
-    "左":   +0.05,   # ホーム向かい風 → 差し不利、逃げ有利
-    "右":   -0.05,   # バック追い風 → 差し不利、逃げ有利
-
-    "左下": +0.035,   # ゴール寄り追い風 → 差しやや有利
-    "下":   +0.05,   # ゴール強追い風 → 差し最大有利（逃げ最大不利）
-    "右下": +0.035    # 差しやや有利
+    "左上": -0.03, "上": -0.05, "右上": -0.035,
+    "左": +0.05, "右": -0.05,
+    "左下": +0.035, "下": +0.05, "右下": +0.035
 }
-position_multipliers = {
-    0: 0.3,  # 単騎
-    1: 0.32,  # 先頭
-    2: 0.3,
-    3: 0.25,
-    4: 0.2  # 4番手
-}
-
-
-# --- 基本スコア（脚質ごとの基準値） ---
+position_multipliers = {0: 0.3, 1: 0.32, 2: 0.3, 3: 0.25, 4: 0.2}
 base_score = {'逃': 4.7, '両': 4.8, '追': 5.0}
 
-# --- 状態保持 ---
+# --- 状態初期化 ---
 if "selected_wind" not in st.session_state:
     st.session_state.selected_wind = "無風"
 
-# --- バンク・風条件セクション ---
+# --- UI：バンクと風条件 ---
 st.header("【バンク・風条件】")
-
-cols_top = st.columns(3)
-cols_mid = st.columns(3)
-cols_bot = st.columns(3)
-
-with cols_top[0]:
-    if st.button("左上"):
-        st.session_state.selected_wind = "左上"
-with cols_top[1]:
-    if st.button("上"):
-        st.session_state.selected_wind = "上"
-with cols_top[2]:
-    if st.button("右上"):
-        st.session_state.selected_wind = "右上"
-with cols_mid[0]:
-    if st.button("左"):
-        st.session_state.selected_wind = "左"
-with cols_mid[1]:
-    st.markdown("""
-    <div style='text-align:center; font-size:16px; line-height:1.6em;'>
-        ↑<br>［上］<br>
-        ← 左　　　右 →<br>
-        ［下］<br>↓<br>
-        □ ホーム→（ ゴール）
-    </div>
-    """, unsafe_allow_html=True)
-with cols_mid[2]:
-    if st.button("右"):
-        st.session_state.selected_wind = "右"
-with cols_bot[0]:
-    if st.button("左下"):
-        st.session_state.selected_wind = "左下"
-with cols_bot[1]:
-    if st.button("下"):
-        st.session_state.selected_wind = "下"
-with cols_bot[2]:
-    if st.button("右下"):
-        st.session_state.selected_wind = "右下"
-
+cols = st.columns(3)
+for i, dir in enumerate(["左上", "上", "右上", "左", "右", "左下", "下", "右下"]):
+    with cols[i % 3]:
+        if st.button(dir):
+            st.session_state.selected_wind = dir
 st.subheader(f"✅ 選択中の風向き：{st.session_state.selected_wind}")
 
 # ▼ 競輪場選択による自動入力
@@ -128,95 +78,50 @@ keirin_data = {
 selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
 selected_info = keirin_data[selected_track]
 
-# ▼ 風速入力（手動）
-wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
+with st.form("score_form"):
+    st.subheader("【バンク・風条件＋選手データ入力】")
 
-# ▼ 自動反映される直線長さ・バンク角・周長
-straight_length = st.number_input("みなし直線(m)", min_value=30.0, max_value=80.0, step=0.05,
-                                  value=float(selected_info["straight_length"]))
+    selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
+    selected_info = keirin_data[selected_track]
 
-bank_angle = st.number_input("バンク角(°)", min_value=20.0, max_value=45.0, step=0.05,
-                             value=float(selected_info["bank_angle"]))
+    wind_speed = st.number_input("風速(m/s)", min_value=0.0, max_value=30.0, step=0.1, value=3.0)
+    straight_length = st.number_input("みなし直線(m)", value=float(selected_info["straight_length"]))
+    bank_angle = st.number_input("バンク角(°)", value=float(selected_info["bank_angle"]))
+    bank_length = st.number_input("バンク周長(m)", value=float(selected_info["bank_length"]))
+    laps = st.number_input("周回数", min_value=1, max_value=10, value=4)
 
-bank_length = st.number_input("バンク周長(m)", min_value=300.0, max_value=500.0, step=0.05,
-                              value=float(selected_info["bank_length"]))
+    st.markdown("▼ 位置入力（逃・両・追）")
+    kakushitsu_keys = ['逃', '両', '追']
+    car_to_kakushitsu = {}
+    cols = st.columns(3)
+    for i, k in enumerate(kakushitsu_keys):
+        with cols[i]:
+            val = st.text_input(f"{k}（脚質）", key=f"kaku_{k}")
+            for c in val:
+                if c.isdigit():
+                    car_to_kakushitsu[int(c)] = k
 
+    chaku_inputs = []
+    rating = []
+    tairetsu = []
+    for i in range(7):
+        col1, col2 = st.columns(2)
+        chaku1 = col1.text_input(f"{i+1}番【前々走】", key=f"chaku1_{i}")
+        chaku2 = col2.text_input(f"{i+1}番【前走】", key=f"chaku2_{i}")
+        chaku_inputs.append([chaku1, chaku2])
 
-# ▼ 周回数の入力（通常は4、高松などは5）
-laps = st.number_input("周回数（通常は4、高松などは5）", min_value=1, max_value=10, value=4, step=1)
+        rating.append(st.number_input(f"{i+1}番得点", value=55.0, key=f"rate_{i}"))
+        tairetsu.append(st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}"))
+        st.number_input("S回数", min_value=0, max_value=99, value=0, key=f"s_point_{i+1}")
+        st.number_input("B回数", min_value=0, max_value=99, value=0, key=f"b_point_{i+1}")
 
-# --- 【選手データ入力】 ---
-st.header("【選手データ入力】")
+    st.markdown("▼ ライン構成入力（最大7ライン）")
+    line_input = {}
+    for label in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+        line_input[label] = st.text_input(f"{label}ライン（例：13）", key=f"line_{label}")
 
-st.subheader("▼ 位置入力（逃＝先頭・両＝番手・追＝３番手以降&単騎：車番を半角数字で入力）")
+    submitted = st.form_submit_button("スコア計算実行")
 
-kakushitsu_keys = ['逃', '両', '追']
-kakushitsu_inputs = {}
-cols = st.columns(3)
-for i, k in enumerate(kakushitsu_keys):
-    with cols[i]:
-        st.markdown(f"**{k}**")
-        kakushitsu_inputs[k] = st.text_input("", key=f"kaku_{k}", max_chars=14)
-
-# 車番 → 脚質の辞書を構築
-car_to_kakushitsu = {}
-for k, val in kakushitsu_inputs.items():
-    for c in val:
-        if c.isdigit():
-            n = int(c)
-            if 1 <= n <= 7:
-                car_to_kakushitsu[n] = k
-
-st.subheader("▼ 前々走・前走の着順入力（1〜9着 または 0＝落車）")
-
-# 7選手 × 2走分
-chaku_inputs = []  # [[前々走, 前走], ..., [前々走, 前走]]
-
-for i in range(7):
-    col1, col2 = st.columns(2)
-    with col1:
-        chaku1 = st.text_input(f"{i+1}番【前々走】", value="", key=f"chaku1_{i}")
-    with col2:
-        chaku2 = st.text_input(f"{i+1}番【前走】", value="", key=f"chaku2_{i}")
-    chaku_inputs.append([chaku1, chaku2])
-
-
-
-st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
-
-st.subheader("▼ 予想隊列入力（数字、欠の場合は空欄）")
-tairetsu = [st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}") for i in range(7)]
-
-
-# --- S・B 入力（回数を数値で入力） ---
-st.subheader("▼ S・B 入力（各選手のS・B回数を入力）")
-
-for i in range(7):
-    st.markdown(f"**{i+1}番**")
-    s_val = st.number_input("S回数", min_value=0, max_value=99, value=0, step=1, key=f"s_point_{i+1}")
-    b_val = st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
-
-
-# --- 補助関数 ---
-def extract_car_list(input_str):
-    return [int(c) for c in input_str if c.isdigit()]
-
-def build_line_position_map():
-    line_position_map = {}
-    line_def = {
-        'A': extract_car_list(a_line),
-        'B': extract_car_list(b_line),
-        'C': extract_car_list(c_line),
-        'D': extract_car_list(d_line),
-        'E': extract_car_list(e_line),
-        'F': extract_car_list(f_line),
-        'G': extract_car_list(g_line),
-    }
-    for label, members in line_def.items():
-        for i, car in enumerate(members):
-            line_position_map[car] = (label, i + 1)
-    return line_position_map, line_def
 
 # --- スコア補正関数 ---
 def score_from_tenscore_list(tenscore_list):
