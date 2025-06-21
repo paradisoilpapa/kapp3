@@ -208,7 +208,7 @@ e_line = st.text_input("Eライン（例：9）", key="e_line", max_chars=9)
 f_line = st.text_input("Fライン（例：24）", key="f_line", max_chars=9)
 g_line = st.text_input("Gライン（例：57）", key="g_line", max_chars=9)
 
-# --- ライン構成入力に必要な補助関数 ---
+# --- 補助関数 ---
 def extract_car_list(input_str):
     return [int(c) for c in input_str if c.isdigit()]
 
@@ -225,42 +225,34 @@ def build_line_position_map():
     }
     for label, members in line_def.items():
         for i, car in enumerate(members):
-            line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
+            line_position_map[car] = (label, i + 1)
     return line_position_map, line_def
 
-# --- スコア計算ボタン表示 ---
+# --- スコア補正関数 ---
+def score_from_tenscore_list(tenscore_list):
+    import pandas as pd
+    df = pd.DataFrame({"得点": tenscore_list})
+    df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
+    baseline = df[df["順位"].between(2, 6)]["得点"].mean()
+
+    def apply_targeted_correction(row):
+        if row["順位"] in [2, 3, 4]:
+            correction = abs(baseline - row["得点"]) * 0.03
+            return round(correction, 3)
+        else:
+            return 0.0
+
+    df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
+    return df["最終補正値"].tolist()
+
+# --- スコア計算トリガー ---
 st.subheader("▼ スコア計算")
 if st.button("スコア計算実行"):
-    # ここには extract_car_list の再定義は不要です
-    # スコア計算処理をここに記述
+    line_position_map, line_def = build_line_position_map()
+    st.write("ライン構成マップ:", line_position_map)
+    st.write("ライン定義:", line_def)
+    # scores = score_from_tenscore_list([...]) など必要に応じて呼び出し
 
-
-# --- スコア計算ボタン表示 ---
-st.subheader("▼ スコア計算")
-if st.button("スコア計算実行"):
-
-    def extract_car_list(input_str):
-        return [int(c) for c in input_str if c.isdigit()]
-
-    def score_from_tenscore_list(tenscore_list):
-        import pandas as pd
-    
-        df = pd.DataFrame({"得点": tenscore_list})
-        df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
-    
-        # 基準点：2〜6位の平均
-        baseline = df[df["順位"].between(2, 6)]["得点"].mean()
-    
-        # 2〜4位だけ補正（差分の3％、必ず正の加点）
-        def apply_targeted_correction(row):
-            if row["順位"] in [2, 3, 4]:
-                correction = abs(baseline - row["得点"]) * 0.03
-                return round(correction, 3)
-            else:
-                return 0.0
-    
-        df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
-        return df["最終補正値"].tolist()
 
     def wind_straight_combo_adjust(kaku, direction, speed, straight, pos):
         if direction == "無風" or speed < 0.5:
