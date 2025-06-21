@@ -444,6 +444,10 @@ if len(b_list) != len(df):
     st.stop()
 df["B回数"] = b_list
 
+# --- 競争得点の取得 ---
+rating = [st.session_state.get(f"rate_{i}", 55.0) for i in range(7)]
+df["得点"] = rating
+
 # --- ライン構成取得（UI入力を優先） ---
 a_line = extract_car_list(a_line)
 b_line = extract_car_list(b_line)
@@ -465,22 +469,23 @@ solo_members = line_def_raw.get('単騎', [])
 for i, solo_car in enumerate(solo_members):
     line_def[f'単騎{i+1}'] = [solo_car]
 
-# --- ◎決定（得点2〜4位からスコア最大の選手） ---
-df_sorted_by_score = df.sort_values(by="得点", ascending=False).reset_index(drop=True)
-dotens_2_4 = df_sorted_by_score.iloc[1:4]["車番"].tolist()
-df_top_candidates = df[df["車番"].isin(dotens_2_4)].copy()
-anchor_row = df_top_candidates.sort_values(by="合計スコア", ascending=False).iloc[0]
+# --- ◎決定（得点2〜4位からスコア最上位） ---
+df_sorted_by_score = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
+df_sorted_by_rating = df.sort_values(by="得点", ascending=False).reset_index(drop=True)
+df_rating_top2_4 = df_sorted_by_rating.iloc[1:4]
+df_candidate = df[df["車番"].isin(df_rating_top2_4["車番"])]
+anchor_row = df_candidate.sort_values(by="合計スコア", ascending=False).iloc[0]
 anchor = int(anchor_row["車番"])
 
-# 本命ライン再定義（anchorを含むラインをAラインに）
-anchor_in_line = False
-for line_name, members in line_def.items():
+# --- 本命ラインの再設定（anchorが含まれるライン） ---
+main_line_found = False
+for label, members in line_def.items():
     if anchor in members:
         a_line = members
-        anchor_in_line = True
+        main_line_found = True
         break
-if not anchor_in_line:
-    a_line = [anchor]  # 単騎の場合でもAラインとして扱う
+if not main_line_found:
+    a_line = [anchor]
 
 # --- 三連複構成抽出 ---
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
