@@ -393,25 +393,26 @@ line_order = [line_position_map.get(i + 1, (None, 0))[1] for i in range(9)]
 
 
 
-    # スコア計算
+# スコア計算
 tenscore_score = score_from_tenscore_list(rating)
 score_parts = []
 
-    for i in range(7):
-        if not tairetsu[i].isdigit():
-            continue
+for i in range(7):
+    if not tairetsu[i].isdigit():
+        continue
 
-        num = i + 1
-        kaku = car_to_kakushitsu.get(num, "追")
-        base = base_score[kaku]
+    num = i + 1
+    kaku = car_to_kakushitsu.get(num, "追")
+    base = base_score[kaku]
 
-        wind = wind_straight_combo_adjust(
-            kaku,
-            st.session_state.selected_wind,
-            wind_speed,
-            straight_length,
-            line_order[i]
-        )
+    wind = wind_straight_combo_adjust(
+        kaku,
+        st.session_state.selected_wind,
+        wind_speed,
+        straight_length,
+        line_order[i]
+    )
+
 
         chaku_values = chaku_inputs[i]
         kasai = convert_chaku_to_score(chaku_inputs[i]) or 0.0
