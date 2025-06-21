@@ -130,12 +130,14 @@ with st.form("score_form"):
         st.number_input("S回数", min_value=0, max_value=99, value=0, step=1, key=f"s_point_{i+1}")
         st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
 
-    st.subheader("▼ ライン構成入力（A〜Dライン＋単騎）")
+    st.subheader("▼ ライン構成入力（A〜Gライン）")
     a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
     b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
     c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
     d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
-    solo_line = st.text_input("単騎枠（例：9）", key="solo_line", max_chars=9)
+    e_line = st.text_input("Eライン（例：29）", key="e_line", max_chars=9)
+    f_line = st.text_input("Fライン（例：14）", key="f_line", max_chars=9)
+    g_line = st.text_input("Gライン（例：36）", key="g_line", max_chars=9)
 
     submitted = st.form_submit_button("スコア計算実行")
 
@@ -145,13 +147,10 @@ def extract_car_list(input_str):
 
 def build_line_position_map():
     result = {}
-    for line, name in zip([a_line, b_line, c_line, d_line, solo_line], ['A', 'B', 'C', 'D', 'S']):
+    for line, name in zip([a_line, b_line, c_line, d_line, e_line, f_line, g_line], ['A', 'B', 'C', 'D', 'E', 'F', 'G']):
         cars = extract_car_list(line)
         for i, car in enumerate(cars):
-            if name == 'S':
-                result[car] = 0
-            else:
-                result[car] = i + 1
+            result[car] = i + 1
     return result
 
 # --- スコア補正関数 ---
@@ -168,6 +167,7 @@ if submitted:
     st.write("ライン構成マップ:", line_position_map)
     scores = score_from_tenscore_list(rating)
     st.write("補正スコア:", scores)
+
 
 
 
