@@ -478,30 +478,68 @@ for i in range(7):
         rain_corr, symbol_score, line_bonus, bank_bonus, length_bonus, total
     ])
 
-# --- グループ補正 ---
-# 仮想ラベルで line_def を構築（自由入力から A〜G に割当）
+# --- グループ補正関数（line_defに基づきボーナスマップを作成） ---
+def compute_group_bonus(score_parts, line_def):
+    group_scores = {k: 0.0 for k in line_def.keys()}
+    group_counts = {k: 0 for k in line_def.keys()}
+
+    # 車番からグループを逆引き
+    car_to_group = {}
+    for group, members in line_def.items():
+        for car in members:
+            car_to_group[car] = group
+
+    # 各グループの合計スコアを計算
+    for entry in score_parts:
+        car_no, score = entry[0], entry[-1]
+        group = car_to_group.get(car_no)
+        if group:
+            group_scores[group] += score
+            group_counts[group] += 1
+
+    # 順位を決定（合計スコアベース）
+    sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
+    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.05, 0.03, 0.01]
+    bonus_map = {
+        group: bonus_values[idx] if idx < len(bonus_values) else 0.0
+        for idx, (group, _) in enumerate(sorted_lines)
+    }
+
+    return bonus_map
+
+# --- グループ補正スコアを取得 ---
+def get_group_bonus(car_no, line_def, bonus_map):
+    for group, members in line_def.items():
+        if car_no in members:
+            return bonus_map.get(group, 0.0)
+    return 0.0  # 所属なし
+
+# --- line_def 構築（空行除外） ---
 labels = ["A", "B", "C", "D", "E", "F", "G"]
 line_def = {}
 for idx, line in enumerate(lines):
-    if idx < len(labels):
+    if line:  # 空欄チェック
         line_def[labels[idx]] = line
 
-# line_def を使ってボーナス計算
+# --- グループ補正マップ作成 ---
 group_bonus_map = compute_group_bonus(score_parts, line_def)
 
+# --- グループ補正を最終スコアに反映 ---
 final_score_parts = []
 for row in score_parts:
     group_corr = get_group_bonus(row[0], line_def, group_bonus_map)
     new_total = row[-1] + group_corr
     final_score_parts.append(row[:-1] + [group_corr, new_total])
 
-# --- 表示 ---
+# --- 表示用DataFrame ---
 df = pd.DataFrame(final_score_parts, columns=[
     '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
     '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
     'グループ補正', '合計スコア'
-    ])
+])
+
 st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
+
     
 try:
     if not final_score_parts:
