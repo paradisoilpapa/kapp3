@@ -408,7 +408,7 @@ for i in range(7):
     )
 
     # 必要であれば wind, base, tenscore_score[i] を使って加点などを続けてください
-   tenscore_score = score_from_tenscore_list(rating)
+    tenscore_score = score_from_tenscore_list(rating)
     score_parts = []
 
     for i in range(7):
@@ -418,9 +418,9 @@ for i in range(7):
         num = i + 1
         kaku = car_to_kakushitsu.get(num, "追")
         base = base_score[kaku]
-
+        
         wind = wind_straight_combo_adjust(
-            kaku,
+        kaku,
             st.session_state.selected_wind,
             wind_speed,
             straight_length,
