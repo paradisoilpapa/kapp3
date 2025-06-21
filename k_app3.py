@@ -254,6 +254,7 @@ if st.button("スコア計算実行"):
     # scores = score_from_tenscore_list([...]) など必要に応じて呼び出し
 
 
+
     def wind_straight_combo_adjust(kaku, direction, speed, straight, pos):
         if direction == "無風" or speed < 0.5:
             return 0
