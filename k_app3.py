@@ -314,7 +314,7 @@ def build_line_position_map():
     }
     for label, members in line_def.items():
         for i, car in enumerate(members):
-            line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
+            line_position_map[car] = (label, i + 1)
     return line_position_map, line_def
 
 # --- グループ補正取得関数 ---
