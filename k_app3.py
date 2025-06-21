@@ -295,15 +295,23 @@ if submitted:
         return bonus_map
 
 
-# --- ライン構成入力（最大7ライン対応：A〜G） ---
-st.subheader("▼ ライン構成入力（最大7ライン）")
-a_line = st.text_input("Aライン（例：13）", key="a_line_main", max_chars=9)
-b_line = st.text_input("Bライン（例：25）", key="b_line_main", max_chars=9)
-c_line = st.text_input("Cライン（例：47）", key="c_line_main", max_chars=9)
-d_line = st.text_input("Dライン（例：68）", key="d_line_main", max_chars=9)
-e_line = st.text_input("Eライン（例：9）", key="e_line_main", max_chars=9)
-f_line = st.text_input("Fライン（例：24）", key="f_line_main", max_chars=9)
-g_line = st.text_input("Gライン（例：57）", key="g_line_main", max_chars=9)
+# --- フォーム内：ライン構成入力（最大7ライン対応：A〜G） ---
+with st.form(key="line_input_form"):
+    st.subheader("▼ ライン構成入力（最大7ライン）")
+    a_line = st.text_input("Aライン（例：13）", key="a_line_main", max_chars=9)
+    b_line = st.text_input("Bライン（例：25）", key="b_line_main", max_chars=9)
+    c_line = st.text_input("Cライン（例：47）", key="c_line_main", max_chars=9)
+    d_line = st.text_input("Dライン（例：68）", key="d_line_main", max_chars=9)
+    e_line = st.text_input("Eライン（例：29）", key="e_line_main", max_chars=9)
+    f_line = st.text_input("Fライン（例：14）", key="f_line_main", max_chars=9)
+    g_line = st.text_input("Gライン（例：36）", key="g_line_main", max_chars=9)
+
+    submitted = st.form_submit_button("スコア計算実行")
+
+    if submitted:
+        line_position_map, line_def = build_line_position_map()
+        st.session_state.line_position_map = line_position_map
+        st.session_state.line_def = line_def
 
 # --- ライン構成入力に必要な補助関数 ---
 def extract_car_list(input_str):
@@ -312,18 +320,19 @@ def extract_car_list(input_str):
 def build_line_position_map():
     line_position_map = {}
     line_def = {
-        'A': extract_car_list(a_line),
-        'B': extract_car_list(b_line),
-        'C': extract_car_list(c_line),
-        'D': extract_car_list(d_line),
-        'E': extract_car_list(e_line),
-        'F': extract_car_list(f_line),
-        'G': extract_car_list(g_line),
+        'A': extract_car_list(st.session_state.get("a_line_main", "")),
+        'B': extract_car_list(st.session_state.get("b_line_main", "")),
+        'C': extract_car_list(st.session_state.get("c_line_main", "")),
+        'D': extract_car_list(st.session_state.get("d_line_main", "")),
+        'E': extract_car_list(st.session_state.get("e_line_main", "")),
+        'F': extract_car_list(st.session_state.get("f_line_main", "")),
+        'G': extract_car_list(st.session_state.get("g_line_main", "")),
     }
     for label, members in line_def.items():
         for i, car in enumerate(members):
-            line_position_map[car] = (label, i + 1)
+            line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
     return line_position_map, line_def
+
 
 # --- グループ補正取得関数 ---
 def get_group_bonus(car_no, line_def, group_bonus_map):
