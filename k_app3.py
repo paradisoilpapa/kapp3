@@ -512,6 +512,13 @@ import streamlit as st
 
 # --- ◎ライン・対抗・漁夫の利ラインによるフォーメ構成（一元化） ---
 
+# ◎（合計スコア最大）の車番
+anchor_car = max(final_score_parts, key=lambda x: x[-1])[0]
+
+# ◎が含まれるラインのインデックスを取得
+anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
+
+
 # ◎ラインからスコア順で取得
 anchor_score_sorted = sorted(
     [row for row in final_score_parts if row[0] in lines[anchor_line_idx]],
@@ -520,6 +527,59 @@ anchor_score_sorted = sorted(
 )
 anchor_car = anchor_score_sorted[0][0]
 anchor_others = [row[0] for row in anchor_score_sorted[1:]]
+
+
+# --- ライン役割定義（index番号で指定：0=A本線, 1=B対抗, 2以降=C漁夫） ---
+line_roles = {
+    0: "A",  # 本線（◎がいるライン）
+    1: "B",  # 対抗ライン
+    2: "C",  # 漁夫の利ライン
+    3: "C",
+    4: "C",
+    5: "C",
+    6: "C"
+}
+
+# --- ラインごとの車番を取得 ---
+a_line = lines[anchor_line_idx]  # 本線（◎のいるライン）
+b_cars = [car for idx, role in line_roles.items() if role == "B" and idx < len(lines) for car in lines[idx]]
+c_cars = [car for idx, role in line_roles.items() if role == "C" and idx < len(lines) for car in lines[idx]]
+
+# --- ◎ライン内をスコア順に並べる（上位3車が候補） ---
+anchor_score_sorted = sorted(
+    [row for row in final_score_parts if row[0] in a_line],
+    key=lambda x: x[-1],
+    reverse=True
+)
+anchor_car = anchor_score_sorted[0][0]  # ◎（念のため再定義）
+anchor_others = [row[0] for row in anchor_score_sorted[1:]]  # 残りのAライン構成
+
+# --- フォーメーション構成 ---
+# ◎-23-234C（本線厚め）
+pattern_1 = [
+    tuple(sorted([anchor_car, x, y]))
+    for x in anchor_others[:2]
+    for y in anchor_others[:3] + c_cars
+    if len(set([anchor_car, x, y])) == 3
+]
+
+# 56-56-◎（対抗厚め）
+pattern_2 = [
+    tuple(sorted([x, y, anchor_car]))
+    for i, x in enumerate(b_cars)
+    for y in b_cars[i+1:]
+    if len(set([x, y, anchor_car])) == 3
+]
+
+# --- 表示 ---
+st.markdown("### 🎯 フォーメーション構成（本線＋漁夫）")
+for p in pattern_1[:10]:
+    st.markdown(f"- {p[0]} - {p[1]} - {p[2]}")
+
+st.markdown("### 🎯 フォーメーション構成（対抗中心）")
+for p in pattern_2[:10]:
+    st.markdown(f"- {p[0]} - {p[1]} - {p[2]}")
+
 
 # 対抗ライン・漁夫ライン
 b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
