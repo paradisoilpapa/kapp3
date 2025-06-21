@@ -452,20 +452,28 @@ for i in range(7):
     ])
 
 
-    # グループ補正
-    group_bonus_map = compute_group_bonus(score_parts, line_def)
-    final_score_parts = []
-    for row in score_parts:
-        group_corr = get_group_bonus(row[0], line_def, group_bonus_map)
-        new_total = row[-1] + group_corr
-        final_score_parts.append(row[:-1] + [group_corr, new_total])
+# --- グループ補正 ---
+# 仮想ラベルで line_def を構築（自由入力から A〜G に割当）
+labels = ["A", "B", "C", "D", "E", "F", "G"]
+line_def = {}
+for idx, line in enumerate(lines):
+    if idx < len(labels):
+        line_def[labels[idx]] = line
 
+# line_def を使ってボーナス計算
+group_bonus_map = compute_group_bonus(score_parts, line_def)
 
-    # 表示
-    df = pd.DataFrame(final_score_parts, columns=[
-        '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
-        '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
-        'グループ補正', '合計スコア'
+final_score_parts = []
+for row in score_parts:
+    group_corr = get_group_bonus(row[0], line_def, group_bonus_map)
+    new_total = row[-1] + group_corr
+    final_score_parts.append(row[:-1] + [group_corr, new_total])
+
+# --- 表示 ---
+df = pd.DataFrame(final_score_parts, columns=[
+    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
+    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
+    'グループ補正', '合計スコア'
     ])
     st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
     
