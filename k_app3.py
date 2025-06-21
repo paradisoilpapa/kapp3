@@ -4,17 +4,17 @@ import pandas as pd
 # --- ページ設定 ---
 st.set_page_config(page_title="ライン競輪スコア計算（完全統一版）", layout="wide")
 
-st.title("⭐ ライン競車スコア計算（第7車ライン＋欠番対応）⭐")
+st.title("⭐ ライン競輪スコア計算（7車ライン＋欠番対応）⭐")
 
 wind_coefficients = {
-    "左上": -0.03,   # ホーム復の風 → 差し有利（逃げやや不利）
+    "左上": -0.03,   # ホーム寄りからの風 → 差し有利（逃げやや不利）
     "上":   -0.05,   # バック向かい風 → 逃げ最大不利
     "右上": -0.035,   # 差しやや有利
 
     "左":   +0.05,   # ホーム向かい風 → 差し不利、逃げ有利
     "右":   -0.05,   # バック追い風 → 差し不利、逃げ有利
 
-    "左下": +0.035,   # ゴール向き追い風 → 差しやや有利
+    "左下": +0.035,   # ゴール寄り追い風 → 差しやや有利
     "下":   +0.05,   # ゴール強追い風 → 差し最大有利（逃げ最大不利）
     "右下": +0.035    # 差しやや有利
 }
@@ -26,6 +26,7 @@ position_multipliers = {
     4: 0.2  # 4番手
 }
 
+
 # --- 基本スコア（脚質ごとの基準値） ---
 base_score = {'逃': 4.7, '両': 4.8, '追': 5.0}
 
@@ -34,7 +35,7 @@ if "selected_wind" not in st.session_state:
     st.session_state.selected_wind = "無風"
 
 # --- バンク・風条件セクション ---
-st.header("［バンク・風条件］")
+st.header("【バンク・風条件】")
 
 cols_top = st.columns(3)
 cols_mid = st.columns(3)
@@ -56,7 +57,7 @@ with cols_mid[1]:
     st.markdown("""
     <div style='text-align:center; font-size:16px; line-height:1.6em;'>
         ↑<br>［上］<br>
-        ← 左：　　右 →<br>
+        ← 左　　　右 →<br>
         ［下］<br>↓<br>
         □ ホーム→（ ゴール）
     </div>
@@ -75,7 +76,6 @@ with cols_bot[2]:
         st.session_state.selected_wind = "右下"
 
 st.subheader(f"✅ 選択中の風向き：{st.session_state.selected_wind}")
-
 
 # ▼ 競輪場選択による自動入力
 keirin_data = {
@@ -529,29 +529,48 @@ if len(b_list) != len(df):
 # --- B回数をdfに格納 ---
 df["B回数"] = b_list
 
-# --- 合計スコア最大の車番（anchor）取得 ---
-anchor_idx = df["合計スコア"].idxmax()
-anchor_row = df.loc[anchor_idx]
-anchor_car = int(anchor_row["車番"])
+# --- 競争得点（ratingリスト）と車番をDataFrameに変換 ---
+score_df = pd.DataFrame({
+    "車番": list(range(1, 8)),
+    "得点": rating
+})
 
-# --- line定義（各行リスト）をもとにanchorライン特定 ---
+# --- 得点順で2〜4位を抽出 ---
+subset = score_df.sort_values(by="得点", ascending=False).iloc[1:4]
+target_car_numbers = subset["車番"].tolist()
+
+# --- 該当車番のスコア情報を抽出 ---
+subset_scores = [row for row in final_score_parts if row[0] in target_car_numbers]
+
+# --- スコア順で並べて中央（2番目）を◎に ---
+subset_scores_sorted = sorted(subset_scores, key=lambda x: x[-1], reverse=True)
+anchor_car = subset_scores_sorted[1][0]  # ◎決定
+
+# --- ◎の所属ラインを本命ライン（A）として定義 ---
 anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
+line_roles = {i: "C" for i in range(len(lines))}  # 初期化：すべて漁夫
+line_roles[anchor_line_idx] = "A"  # 本命ラインを設定
 
-# --- ライン役割定義 ---
-line_roles = {
-    0: "A",  # 本線
-    1: "B",  # 対抗
-    2: "C",  # 漁夫
-    3: "C",
-    4: "C",
-    5: "C",
-    6: "C"
-}
+# --- Bライン候補：得点順1〜4位のうち◎以外の所属ライン ---
+b_candidates = score_df.sort_values(by="得点", ascending=False).iloc[:4]
+b_candidates = b_candidates[b_candidates["車番"] != anchor_car]
+b_line_scores = []
 
-# --- 各役割ラインの車番抽出（lines[idx]が存在する範囲で） ---
+for i, line in enumerate(lines):
+    if i == anchor_line_idx:
+        continue
+    line_score = b_candidates[b_candidates["車番"].isin(line)]["得点"].sum()
+    if line_score > 0:
+        b_line_scores.append((i, line_score))
+
+if b_line_scores:
+    b_line_idx = max(b_line_scores, key=lambda x: x[1])[0]
+    line_roles[b_line_idx] = "B"
+
+# --- 各役割ラインの車番抽出 ---
 a_line = lines[anchor_line_idx]
-b_cars = [car for idx, role in line_roles.items() if role == "B" and idx < len(lines) for car in lines[idx]]
-c_cars = [car for idx, role in line_roles.items() if role == "C" and idx < len(lines) for car in lines[idx]]
+b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
+c_cars = [car for idx, role in line_roles.items() if role == "C" for car in lines[idx]]
 
 # --- anchorライン内でスコア順ソート ---
 anchor_score_sorted = sorted(
@@ -562,15 +581,15 @@ anchor_score_sorted = sorted(
 anchor_car = anchor_score_sorted[0][0]  # 念のため再定義
 anchor_others = [row[0] for row in anchor_score_sorted[1:]]
 
-# --- パターン①（本線＋漁夫）構成 ---
+# --- パターン①（◎-◎ライン-漁夫）構成 ---
 pattern_1 = [
     tuple(sorted([anchor_car, x, y]))
-    for x in anchor_others[:2]
-    for y in anchor_others[:3] + c_cars
+    for x in anchor_others
+    for y in c_cars
     if len(set([anchor_car, x, y])) == 3
 ]
 
-# --- パターン②（対抗＋◎）構成 ---
+# --- パターン②（対抗BOX-対抗BOX-◎）構成 ---
 pattern_2 = [
     tuple(sorted([x, y, anchor_car]))
     for i, x in enumerate(b_cars)
@@ -584,13 +603,13 @@ pattern_2 = sorted(set(pattern_2))
 
 # --- 表示 ---
 st.markdown("### 🌟 フォーメーション構成")
-st.markdown(f"◆ ※本線(※がいるライン): {anchor_car} in {a_line}")
+st.markdown(f"◆ 本線ライン（◎が所属）: {anchor_car} in {a_line}")
 st.markdown(f"◆ 対抗ライン: {b_cars} ／ 漁夫ライン: {c_cars}")
 
-st.markdown("#### ▶ パターン1：1-23-234C")
+st.markdown("#### ▶ パターン1：◎-◎ライン-漁夫")
 for p in pattern_1:
     st.write(f"BOX {p}")
 
-st.markdown("#### ▶ パターン2：56-56-1")
+st.markdown("#### ▶ パターン2：対抗BOX-対抗BOX-◎")
 for p in pattern_2:
     st.write(f"BOX {p}")
