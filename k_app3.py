@@ -386,12 +386,12 @@ line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
 
 
 # スコア計算
-    tenscore_score = score_from_tenscore_list(rating)
-    score_parts = []
-    
-    for i in range(7):
-        if not tairetsu[i].isdigit():
-            continue
+tenscore_score = score_from_tenscore_list(rating)
+score_parts = []
+
+for i in range(7):
+    if not tairetsu[i].isdigit():
+        continue
 
     num = i + 1
     kaku = car_to_kakushitsu.get(num, "追")
@@ -404,6 +404,11 @@ line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
         straight_length,
         line_order[i]
     )
+
+    # 必要に応じてここでスコア合計する例：
+    # final_score = base + wind + tenscore_score[i]
+    # score_parts.append(final_score)
+
 
 # スコア計算
 tenscore_score = score_from_tenscore_list(rating)
