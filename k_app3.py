@@ -412,7 +412,7 @@ for i in range(7):
     # score_parts.append(final_score)
 
 
-# スコア計算
+# --- スコア計算 ---
 tenscore_score = score_from_tenscore_list(rating)
 score_parts = []
 
@@ -433,7 +433,7 @@ for i in range(7):
     )
 
     chaku_values = chaku_inputs[i]
-    kasai = convert_chaku_to_score(chaku_inputs[i]) or 0.0
+    kasai = convert_chaku_to_score(chaku_values) or 0.0
     rating_score = tenscore_score[i]
     rain_corr = lap_adjust(kaku, laps)
     s_bonus = -0.01 * st.session_state.get(f"s_point_{num}", 0)
@@ -449,7 +449,6 @@ for i in range(7):
         num, kaku, base, wind, kasai, rating_score,
         rain_corr, symbol_score, line_bonus, bank_bonus, length_bonus, total
     ])
-
 
 
     # グループ補正
