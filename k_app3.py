@@ -596,8 +596,8 @@ st.markdown(f"◆ 対抗ライン: {b_cars} ／ 漁夫ライン: {c_cars}")
 
 st.markdown("#### ▶ パターン1：◎-◎ライン-漁夫")
 for p in pattern_1:
-    st.write(f"BOX {p}")
+    st.write(f"三連複 {p}")
 
-st.markdown("#### ▶ パターン2：対抗BOX-対抗BOX-◎")
+st.markdown("#### ▶ パターン2：対抗-対抗-◎")
 for p in pattern_2:
-    st.write(f"BOX {p}")
+    st.write(f"三連複 {p}")
