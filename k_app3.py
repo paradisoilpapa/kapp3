@@ -228,6 +228,12 @@ def build_line_position_map():
             line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
     return line_position_map, line_def
 
+# --- スコア計算ボタン表示 ---
+st.subheader("▼ スコア計算")
+if st.button("スコア計算実行"):
+    # ここには extract_car_list の再定義は不要です
+    # スコア計算処理をここに記述
+
 
 # --- スコア計算ボタン表示 ---
 st.subheader("▼ スコア計算")
