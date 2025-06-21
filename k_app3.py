@@ -388,7 +388,7 @@ line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
 
     # スコア計算
 tenscore_score = score_from_tenscore_list(rating)
-    score_parts = []
+score_parts = []
 
     for i in range(7):
         if not tairetsu[i].isdigit():
