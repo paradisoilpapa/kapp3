@@ -475,7 +475,7 @@ df = pd.DataFrame(final_score_parts, columns=[
     '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
     'グループ補正', '合計スコア'
     ])
-    st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
+st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
     
 try:
     if not final_score_parts:
