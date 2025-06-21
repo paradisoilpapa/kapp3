@@ -75,9 +75,7 @@ keirin_data = {
 }
 
 
-selected_track = st.selectbox("▼ 競輪場選択（自動入力）", list(keirin_data.keys()))
-selected_info = keirin_data[selected_track]
-
+keirin_data = {"函館": {"bank_angle": 30.6, "straight_length": 51.3, "bank_length": 400}, "手入力": {"bank_angle": 30.0, "straight_length": 52.0, "bank_length": 400}}
 with st.form("score_form"):
     st.subheader("【バンク・風条件＋選手データ入力】")
 
@@ -122,23 +120,28 @@ with st.form("score_form"):
 
     submitted = st.form_submit_button("スコア計算実行")
 
+def extract_car_list(s):
+    return [int(c) for c in s if c.isdigit()]
 
-# --- スコア補正関数 ---
-def score_from_tenscore_list(tenscore_list):
-    import pandas as pd
-    df = pd.DataFrame({"得点": tenscore_list})
+def build_line_position_map():
+    line_def = {k: extract_car_list(v) for k, v in line_input.items()}
+    position_map = {car: (label, i+1) for label, cars in line_def.items() for i, car in enumerate(cars)}
+    return position_map, line_def
+
+def score_from_tenscore_list(tens):
+    df = pd.DataFrame({"得点": tens})
     df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
     baseline = df[df["順位"].between(2, 6)]["得点"].mean()
+    df["補正"] = df.apply(lambda r: round(abs(baseline - r["得点"]) * 0.03, 3) if r["順位"] in [2, 3, 4] else 0.0, axis=1)
+    return df["補正"].tolist()
 
-    def apply_targeted_correction(row):
-        if row["順位"] in [2, 3, 4]:
-            correction = abs(baseline - row["得点"]) * 0.03
-            return round(correction, 3)
-        else:
-            return 0.0
+if submitted:
+    line_position_map, line_def = build_line_position_map()
+    st.write("ライン構成マップ:", line_position_map)
+    st.write("ライン定義:", line_def)
+    scores = score_from_tenscore_list(rating)
+    st.write("補正スコア:", scores)
 
-    df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
-    return df["最終補正値"].tolist()
 
 # --- スコア計算トリガー ---
 with st.form(key="score_form"):
