@@ -94,6 +94,7 @@ with cols_bot[2]:
 st.subheader(f"✅ 選択中の風向き：{st.session_state.selected_wind}")
 
 
+
 # ▼ 競輪場選択による自動入力
 keirin_data = {
     "函館": {"bank_angle": 30.6, "straight_length": 51.3, "bank_length": 400},
@@ -438,35 +439,6 @@ for i in range(7):
     kaku = car_to_kakushitsu.get(num, "追")  # 車番→脚質
     base = base_score.get(kaku, 0.0)         # 基本スコア取得
 
-    # 風補正（関数が定義済であること前提）
-    wind = wind_straight_combo_adjust(
-        kaku,
-        st.session_state.selected_wind,  # 風向き（"向かい風", "追い風"など）
-        wind_speed,                      # 風速（例：3.0）
-        straight_length,                # 直線距離（例：50）
-        line_order[i]                   # 選手の位置情報（隊列に対応）
-    )
-
-    # 合計スコアを計算（例：基本＋風＋得点補正）
-    total = base + wind + tenscore_score[i]
-
-    # 車番・脚質・各補正値・合計スコアを格納
-    score_parts.append([num, kaku, base, wind, tenscore_score[i], total])
-
-
-
-# --- スコア計算 ---
-tenscore_score = score_from_tenscore_list(rating)
-score_parts = []
-
-for i in range(7):
-    if not tairetsu[i].isdigit():
-        continue
-
-    num = i + 1
-    kaku = car_to_kakushitsu.get(num, "追")
-    base = base_score[kaku]
-
     wind = wind_straight_combo_adjust(
         kaku,
         st.session_state.selected_wind,
@@ -492,7 +464,6 @@ for i in range(7):
         num, kaku, base, wind, kasai, rating_score,
         rain_corr, symbol_score, line_bonus, bank_bonus, length_bonus, total
     ])
-
 
 # --- グループ補正 ---
 # 仮想ラベルで line_def を構築（自由入力から A〜G に割当）
