@@ -511,55 +511,58 @@ except NameError:
     st.stop()
     
 
+# --- 必要モジュールのインポート ---
 import pandas as pd
 import streamlit as st
 
-# --- ◎ライン・対抗・漁夫の利ラインによるフォーメ構成（一元化） ---
+# --- B回数列の統一（バック → B回数）---
+df.rename(columns={"バック": "B回数"}, inplace=True)
 
-# ◎（合計スコア最大）の車番
-anchor_car = max(final_score_parts, key=lambda x: x[-1])[0]
+# --- ユーザー入力されたB回数（バック回数）をdfへ格納 ---
+b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
 
-# ◎が含まれるラインのインデックスを取得
+# --- 再発防止のチェック ---
+if len(b_list) != len(df):
+    st.error(f"⚠ B回数の入力数と選手数が一致していません")
+    st.stop()
+
+# --- B回数をdfに格納 ---
+df["B回数"] = b_list
+
+# --- 合計スコア最大の車番（anchor）取得 ---
+anchor_idx = df["合計スコア"].idxmax()
+anchor_row = df.loc[anchor_idx]
+anchor_car = int(anchor_row["車番"])
+
+# --- line定義（各行リスト）をもとにanchorライン特定 ---
 anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
 
-
-# ◎ラインからスコア順で取得
-anchor_score_sorted = sorted(
-    [row for row in final_score_parts if row[0] in lines[anchor_line_idx]],
-    key=lambda x: x[-1],
-    reverse=True
-)
-anchor_car = anchor_score_sorted[0][0]
-anchor_others = [row[0] for row in anchor_score_sorted[1:]]
-
-
-# --- ライン役割定義（index番号で指定：0=A本線, 1=B対抗, 2以降=C漁夫） ---
+# --- ライン役割定義 ---
 line_roles = {
-    0: "A",  # 本線（◎がいるライン）
-    1: "B",  # 対抗ライン
-    2: "C",  # 漁夫の利ライン
+    0: "A",  # 本線
+    1: "B",  # 対抗
+    2: "C",  # 漁夫
     3: "C",
     4: "C",
     5: "C",
     6: "C"
 }
 
-# --- ラインごとの車番を取得 ---
-a_line = lines[anchor_line_idx]  # 本線（◎のいるライン）
+# --- 各役割ラインの車番抽出（lines[idx]が存在する範囲で） ---
+a_line = lines[anchor_line_idx]
 b_cars = [car for idx, role in line_roles.items() if role == "B" and idx < len(lines) for car in lines[idx]]
 c_cars = [car for idx, role in line_roles.items() if role == "C" and idx < len(lines) for car in lines[idx]]
 
-# --- ◎ライン内をスコア順に並べる（上位3車が候補） ---
+# --- anchorライン内でスコア順ソート ---
 anchor_score_sorted = sorted(
     [row for row in final_score_parts if row[0] in a_line],
     key=lambda x: x[-1],
     reverse=True
 )
-anchor_car = anchor_score_sorted[0][0]  # ◎（念のため再定義）
-anchor_others = [row[0] for row in anchor_score_sorted[1:]]  # 残りのAライン構成
+anchor_car = anchor_score_sorted[0][0]  # 念のため再定義
+anchor_others = [row[0] for row in anchor_score_sorted[1:]]
 
-# --- フォーメーション構成 ---
-# ◎-23-234C（本線厚め）
+# --- パターン①（本線＋漁夫）構成 ---
 pattern_1 = [
     tuple(sorted([anchor_car, x, y]))
     for x in anchor_others[:2]
@@ -567,7 +570,7 @@ pattern_1 = [
     if len(set([anchor_car, x, y])) == 3
 ]
 
-# 56-56-◎（対抗厚め）
+# --- パターン②（対抗＋◎）構成 ---
 pattern_2 = [
     tuple(sorted([x, y, anchor_car]))
     for i, x in enumerate(b_cars)
@@ -575,48 +578,19 @@ pattern_2 = [
     if len(set([x, y, anchor_car])) == 3
 ]
 
-# --- 表示 ---
-st.markdown("### 🎯 フォーメーション構成（本線＋漁夫）")
-for p in pattern_1[:10]:
-    st.markdown(f"- {p[0]} - {p[1]} - {p[2]}")
-
-st.markdown("### 🎯 フォーメーション構成（対抗中心）")
-for p in pattern_2[:10]:
-    st.markdown(f"- {p[0]} - {p[1]} - {p[2]}")
-
-
-# 対抗ライン・漁夫ライン
-b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
-c_cars = [car for idx, role in line_roles.items() if role == "C" for car in lines[idx]]
-
-# --- パターン①：◎厚め（1-23-2347）
-pattern_1 = [
-    tuple(sorted([anchor_car, x, y]))
-    for x in anchor_others[:2]
-    for y in anchor_others[:3] + c_cars
-    if len(set([anchor_car, x, y])) == 3
-]
-
-# --- パターン②：対抗厚め（56-56-1）
-pattern_2 = [
-    tuple(sorted([x, y, anchor_car]))
-    for i, x in enumerate(b_cars)
-    for y in b_cars[i+1:]
-]
-
-# --- 重複除去・ソート
+# --- 重複除去・ソート ---
 pattern_1 = sorted(set(pattern_1))
 pattern_2 = sorted(set(pattern_2))
 
-# --- 表示：整形済（Streamlit & note共用）
-st.markdown("### 🎯 フォーメーション構成（ライン重視ロジック）")
-st.markdown(f"◎：{anchor_car}（ライン：{[row[0] for row in anchor_score_sorted]}）")
-st.markdown(f"対抗ライン：{b_cars} ／ 漁夫の利：{c_cars}")
+# --- 表示 ---
+st.markdown("### 🌟 フォーメーション構成")
+st.markdown(f"◆ ※本線(※がいるライン): {anchor_car} in {a_line}")
+st.markdown(f"◆ 対抗ライン: {b_cars} ／ 漁夫ライン: {c_cars}")
 
-st.markdown("#### ▶ パターン①：1-23-2347（本線）")
+st.markdown("#### ▶ パターン1：1-23-234C")
 for p in pattern_1:
     st.write(f"BOX {p}")
 
-st.markdown("#### ▶ パターン②：56-56-1（対抗押さえ）")
+st.markdown("#### ▶ パターン2：56-56-1")
 for p in pattern_2:
     st.write(f"BOX {p}")
