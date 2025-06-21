@@ -198,29 +198,36 @@ for i in range(7):
     b_val = st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
 
 
-# --- ライン構成入力（A〜Dライン＋単騎） ---
-st.subheader("▼ ライン構成入力（A〜Dライン＋単騎）")
+# --- ライン構成入力（最大7ライン対応：A〜G） ---
+st.subheader("▼ ライン構成入力（最大7ライン）")
 a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
 b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
 c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
 d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
-solo_line = st.text_input("単騎枠（例：9）", key="solo_line", max_chars=9)
-
+e_line = st.text_input("Eライン（例：9）", key="e_line", max_chars=9)
+f_line = st.text_input("Fライン（例：24）", key="f_line", max_chars=9)
+g_line = st.text_input("Gライン（例：57）", key="g_line", max_chars=9)
 
 # --- ライン構成入力に必要な補助関数 ---
 def extract_car_list(input_str):
     return [int(c) for c in input_str if c.isdigit()]
 
 def build_line_position_map():
-    result = {}
-    for line, name in zip([a_line, b_line, c_line, d_line, solo_line], ['A', 'B', 'C', 'D', 'S']):
-        cars = extract_car_list(line)
-        for i, car in enumerate(cars):
-            if name == 'S':
-                result[car] = 0
-            else:
-                result[car] = i + 1
-    return result
+    line_position_map = {}
+    line_def = {
+        'A': extract_car_list(a_line),
+        'B': extract_car_list(b_line),
+        'C': extract_car_list(c_line),
+        'D': extract_car_list(d_line),
+        'E': extract_car_list(e_line),
+        'F': extract_car_list(f_line),
+        'G': extract_car_list(g_line),
+    }
+    for label, members in line_def.items():
+        for i, car in enumerate(members):
+            line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
+    return line_position_map, line_def
+
 
 # --- スコア計算ボタン表示 ---
 st.subheader("▼ スコア計算")
