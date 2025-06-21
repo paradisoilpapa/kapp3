@@ -386,6 +386,27 @@ def score_from_tenscore_list(tenscore_list):
     df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
     return df["最終補正値"].tolist()
 
+# --- グループ補正関数（line_defに基づきボーナスマップを作成） ---
+def compute_group_bonus(score_parts, line_def):
+    group_scores = {k: 0.0 for k in line_def.keys()}
+    group_counts = {k: 0 for k in line_def.keys()}
+
+    for entry in score_parts:
+        car_no, score = entry[0], entry[-1]
+        for group in line_def:
+            if car_no in line_def[group]:
+                group_scores[group] += score
+                group_counts[group] += 1
+                break
+
+    sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
+    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.05, 0.03, 0.01]
+    bonus_map = {
+        group: bonus_values[idx] if idx < len(bonus_values) else 0.0
+        for idx, (group, _) in enumerate(sorted_lines)
+    }
+
+    return bonus_map
 
 
 # スコア計算
