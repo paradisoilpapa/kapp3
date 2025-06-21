@@ -385,15 +385,13 @@ line_order_map = build_line_position_map(lines)
 line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
 
 
-
-    # スコア計算
 # スコア計算
-tenscore_score = score_from_tenscore_list(rating)
-score_parts = []
-
-for i in range(7):
-    if not tairetsu[i].isdigit():
-        continue
+    tenscore_score = score_from_tenscore_list(rating)
+    score_parts = []
+    
+    for i in range(7):
+        if not tairetsu[i].isdigit():
+            continue
 
     num = i + 1
     kaku = car_to_kakushitsu.get(num, "追")
