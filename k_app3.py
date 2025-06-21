@@ -301,6 +301,7 @@ def convert_chaku_to_score(values):
     return round(sum(scores) / len(scores), 2)
 
 
+
     def lap_adjust(kaku, laps):
         delta = max(laps - 2, 0)
         return {
@@ -653,4 +654,3 @@ for p in pattern_1:
 st.markdown("#### ▶ パターン2：対抗-対抗-◎")
 for p in pattern_2:
     st.write(f"三連複 {p}")
-
