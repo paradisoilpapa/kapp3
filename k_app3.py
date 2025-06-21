@@ -130,7 +130,7 @@ with st.form(key="score_form_unique"):
         st.number_input("S回数", min_value=0, max_value=99, value=0, step=1, key=f"s_point_{i+1}")
         st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
 
-    st.subheader("▼ ライン構成入力（A〜Gライン）")
+    st.subheader("▼ ライン構成入力（最大7ライン）")
     a_line = st.text_input("Aライン（例：13）", key="line_input_a", max_chars=9)
     b_line = st.text_input("Bライン（例：25）", key="line_input_b", max_chars=9)
     c_line = st.text_input("Cライン（例：47）", key="line_input_c", max_chars=9)
