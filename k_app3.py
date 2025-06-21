@@ -251,8 +251,11 @@ if st.button("スコア計算実行"):
     line_position_map, line_def = build_line_position_map()
     st.write("ライン構成マップ:", line_position_map)
     st.write("ライン定義:", line_def)
-    # scores = score_from_tenscore_list([...]) など必要に応じて呼び出し
-
+    
+    # 例: 得点入力
+    tenscore_list = [st.number_input(f"{i+1}番の得点", value=55.0, step=0.1, key=f"score_{i}") for i in range(9)]
+    corrected_scores = score_from_tenscore_list(tenscore_list)
+    st.write("補正後スコア：", corrected_scores)
 
 
     def wind_straight_combo_adjust(kaku, direction, speed, straight, pos):
