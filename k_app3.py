@@ -409,7 +409,7 @@ def compute_group_bonus(score_parts, line_def):
     return bonus_map
 
 
-# スコア計算
+# --- スコア計算 ---
 tenscore_score = score_from_tenscore_list(rating)
 score_parts = []
 
@@ -418,9 +418,10 @@ for i in range(7):
         continue
 
     num = i + 1
-    kaku = car_to_kakushitsu.get(num, "追")
-    base = base_score[kaku]
+    kaku = car_to_kakushitsu.get(num, "追")  # 車番→脚質
+    base = base_score.get(kaku, 0.0)         # 基本スコア取得
 
+    # 風補正（関数が定義済であること前提）
     wind = wind_straight_combo_adjust(
         kaku,
         st.session_state.selected_wind,
@@ -429,9 +430,12 @@ for i in range(7):
         line_order[i]
     )
 
-    # 必要に応じてここでスコア合計する例：
-    # final_score = base + wind + tenscore_score[i]
-    # score_parts.append(final_score)
+    # 合計スコアを計算（例：基本＋風＋得点補正）
+    total = base + wind + tenscore_score[i]
+
+    # 車番・脚質・個別補正・合計スコアを格納（後工程のために）
+    score_parts.append([num, kaku, base, wind, tenscore_score[i], total])
+
 
 
 # --- スコア計算 ---
