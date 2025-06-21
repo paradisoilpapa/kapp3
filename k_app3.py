@@ -391,6 +391,21 @@ def get_group_bonus(car_no, line_def, group_bonus_map):
 line_position_map, line_def = build_line_position_map()
 line_order = [line_position_map.get(i + 1, (None, 0))[1] for i in range(9)]
 
+# --- 競争得点リストからスコアを生成する補正関数 ---
+def score_from_tenscore_list(tenscore_list):
+    sorted_unique = sorted(set(tenscore_list), reverse=True)
+    score_to_rank = {score: rank + 1 for rank, score in enumerate(sorted_unique)}
+    result = []
+    for score in tenscore_list:
+        rank = score_to_rank[score]
+        correction = {
+            -3: 0.0, -2: 0.0, -1: 0.0, 0: 0.0,
+             1: 0.10, 2: 0.20, 3: 0.30,
+             4: 0.40, 5: 0.50
+        }
+        result.append(correction.get(rank, 0.0))
+    return result
+
 
 # --- グループ補正取得関数 ---
 def get_group_bonus(car_no, line_def, group_bonus_map):
