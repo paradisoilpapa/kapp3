@@ -407,6 +407,7 @@ def score_from_tenscore_list(tenscore_list):
     return result
 
 
+
 # --- グループ補正取得関数 ---
 def get_group_bonus(car_no, line_def, group_bonus_map):
     for group in line_def:
