@@ -465,34 +465,30 @@ solo_members = line_def_raw.get('単騎', [])
 for i, solo_car in enumerate(solo_members):
     line_def[f'単騎{i+1}'] = [solo_car]
 
-# --- スコア1位のラインを本命ライン（A）に設定 ---
-df_sorted = df.sort_values(by="合計スコア", ascending=False).reset_index(drop=True)
-top_car = int(df_sorted.iloc[0]["車番"])
-anchor = top_car
-anchor_line = None
+# --- ◎決定（得点2〜4位からスコア最大の選手） ---
+df_sorted_by_score = df.sort_values(by="得点", ascending=False).reset_index(drop=True)
+dotens_2_4 = df_sorted_by_score.iloc[1:4]["車番"].tolist()
+df_top_candidates = df[df["車番"].isin(dotens_2_4)].copy()
+anchor_row = df_top_candidates.sort_values(by="合計スコア", ascending=False).iloc[0]
+anchor = int(anchor_row["車番"])
+
+# 本命ライン再定義（anchorを含むラインをAラインに）
+anchor_in_line = False
 for line_name, members in line_def.items():
-    if top_car in members:
-        anchor_line = line_name
+    if anchor in members:
+        a_line = members
+        anchor_in_line = True
         break
-
-if anchor_line is None:
-    st.error("◎に該当するラインが見つかりません")
-    st.stop()
-
-# 本命ラインを再設定（スコア1位のライン）
-a_line = line_def[anchor_line]
-# 対抗・Cグループも再構成
-b_line = [m for k, v in line_def.items() if k != anchor_line for m in v]
-c_group = c_line + d_line + solo_members
-
-# Aライン再設定後のフィルタリング
-a_line_filtered = [a for a in a_line if a != anchor]
+if not anchor_in_line:
+    a_line = [anchor]  # 単騎の場合でもAラインとして扱う
 
 # --- 三連複構成抽出 ---
 kumi_awase = {"構成①": [], "構成②": [], "構成③": []}
 selection_reason = {"構成①": [], "構成②": [], "構成③": []}
 
 # 構成①：◎–A–Cグループ（A残り1＋Cグループ1）
+c_group = c_line + d_line + solo_members
+a_line_filtered = [a for a in a_line if a != anchor]
 if len(a_line_filtered) >= 1 and len(c_group) >= 1:
     a_sorted = list(df[df["車番"].isin(a_line_filtered)].sort_values(by="合計スコア", ascending=False)["車番"])
     c_sorted = list(df[df["車番"].isin(c_group)].sort_values(by="合計スコア", ascending=False)["車番"])
