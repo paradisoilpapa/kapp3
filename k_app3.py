@@ -424,16 +424,16 @@ for i in range(7):
     # 風補正（関数が定義済であること前提）
     wind = wind_straight_combo_adjust(
         kaku,
-        st.session_state.selected_wind,
-        wind_speed,
-        straight_length,
-        line_order[i]
+        st.session_state.selected_wind,  # 風向き（"向かい風", "追い風"など）
+        wind_speed,                      # 風速（例：3.0）
+        straight_length,                # 直線距離（例：50）
+        line_order[i]                   # 選手の位置情報（隊列に対応）
     )
 
     # 合計スコアを計算（例：基本＋風＋得点補正）
     total = base + wind + tenscore_score[i]
 
-    # 車番・脚質・個別補正・合計スコアを格納（後工程のために）
+    # 車番・脚質・各補正値・合計スコアを格納
     score_parts.append([num, kaku, base, wind, tenscore_score[i], total])
 
 
