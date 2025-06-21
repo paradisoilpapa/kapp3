@@ -350,13 +350,13 @@ if st.button("スコア計算実行"):
 
 # --- ライン構成入力（最大7ライン対応：A〜G） ---
 st.subheader("▼ ライン構成入力（最大7ライン）")
-a_line = st.text_input("Aライン（例：13）", key="a_line", max_chars=9)
-b_line = st.text_input("Bライン（例：25）", key="b_line", max_chars=9)
-c_line = st.text_input("Cライン（例：47）", key="c_line", max_chars=9)
-d_line = st.text_input("Dライン（例：68）", key="d_line", max_chars=9)
-e_line = st.text_input("Eライン（例：9）", key="e_line", max_chars=9)
-f_line = st.text_input("Fライン（例：24）", key="f_line", max_chars=9)
-g_line = st.text_input("Gライン（例：57）", key="g_line", max_chars=9)
+a_line = st.text_input("Aライン（例：13）", key="a_line_main", max_chars=9)
+b_line = st.text_input("Bライン（例：25）", key="b_line_main", max_chars=9)
+c_line = st.text_input("Cライン（例：47）", key="c_line_main", max_chars=9)
+d_line = st.text_input("Dライン（例：68）", key="d_line_main", max_chars=9)
+e_line = st.text_input("Eライン（例：9）", key="e_line_main", max_chars=9)
+f_line = st.text_input("Fライン（例：24）", key="f_line_main", max_chars=9)
+g_line = st.text_input("Gライン（例：57）", key="g_line_main", max_chars=9)
 
 # --- ライン構成入力に必要な補助関数 ---
 def extract_car_list(input_str):
@@ -377,6 +377,20 @@ def build_line_position_map():
         for i, car in enumerate(members):
             line_position_map[car] = (label, i + 1)  # ライン名と番手を記録
     return line_position_map, line_def
+
+# --- グループ補正取得関数 ---
+def get_group_bonus(car_no, line_def, group_bonus_map):
+    for group in line_def:
+        if car_no in line_def[group]:
+            base_bonus = group_bonus_map.get(group, 0.0)
+            s_bonus = 0.15 if group == 'A' else 0.0  # Aラインには+0.15
+            return base_bonus + s_bonus
+    return 0.0
+
+# --- ライン構成取得と番手取得マップ作成 ---
+line_position_map, line_def = build_line_position_map()
+line_order = [line_position_map.get(i + 1, (None, 0))[1] for i in range(9)]
+
 
 # --- グループ補正取得関数 ---
 def get_group_bonus(car_no, line_def, group_bonus_map):
