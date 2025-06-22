@@ -636,23 +636,23 @@ anchor_score_sorted = sorted(
 )
 anchor_others = [row[0] for row in anchor_score_sorted if row[0] != anchor_car]
 
-# --- 対抗・漁夫ライン内のスコアとB回数で候補抽出 ---
-def get_low_sb_cars(source_cars):
+# --- 対抗・漁夫ライン内のスコアとB回数で候補抽出（B回数2以下） ---
+def get_b2_and_score_max(source_cars):
     sub_df = df[df["車番"].isin(source_cars)].copy()
     sub_scores = {row[0]: row[-1] for row in final_score_parts if row[0] in source_cars}
     sub_df["スコア"] = sub_df["車番"].map(sub_scores)
-    sub_df["S+B"] = sub_df[["S", "B回数"]].sum(axis=1)
-    sb_min = sub_df["S+B"].min()
+    sub_df = sub_df[sub_df["B回数"] <= 2]
+    if sub_df.empty:
+        return []
     score_max = sub_df["スコア"].max()
-    sb_cand = sub_df[sub_df["S+B"] == sb_min]
-    final = sb_cand[sb_cand["スコア"] == score_max]
+    final = sub_df[sub_df["スコア"] == score_max]
     return final["車番"].tolist()
 
 # --- 候補抽出 ---
-b_sb_low = get_low_sb_cars(b_cars)
-c_sb_low = get_low_sb_cars(c_cars)
+b_sb_low = get_b2_and_score_max(b_cars)
+c_sb_low = get_b2_and_score_max(c_cars)
 
-# --- パターン3：◎-S+B最小-スコア最大 ---
+# --- パターン3：◎-B2以下-スコア最大 ---
 pattern_3 = []
 for x in b_sb_low + c_sb_low:
     for y in b_cars + c_cars:
@@ -694,6 +694,6 @@ with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
     for p in pattern_2:
         st.write(f"三連複 {p}")
 
-with st.expander("▶ パターン3：◎-S+B最小-スコア最大", expanded=True):
+with st.expander("▶ パターン3：◎-B2以下-スコア最大", expanded=True):
     for p in pattern_3:
         st.write(f"三連複 {p}")
