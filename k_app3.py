@@ -594,7 +594,7 @@ df["B回数"] = b_list
 
 # --- 競争得点（ratingリスト）と車番をDataFrameに変換 ---
 score_df = pd.DataFrame({
-    "車番": list(range(1, 8)),
+    "車番": list(range(1, 9)),
     "得点": rating
 })
 
