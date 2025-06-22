@@ -656,22 +656,29 @@ def get_score_max(source_cars):
     max_score = max([x[1] for x in sub_scores])
     return [x[0] for x in sub_scores if x[1] == max_score]
 
-# --- 理想構成の抽出 ---
-b_sb_low = get_b2_and_score_max(b_cars)
-c_sb_low = get_b2_and_score_max([car for car in a_line + c_cars if car != anchor_car])
-b_score_max = get_score_max(b_cars)
-c_score_max = get_score_max([car for car in a_line + c_cars if car != anchor_car])
+# --- 理想構成の抽出（重複排除つき） ---
+pattern_3_info = {}
+used_cars = {anchor_car}
 
-# --- パターン3：◎-対抗SB少-B/C SB少-対抗スコア高-B/Cスコア高 ---
-pattern_3 = []
-if b_sb_low and c_sb_low and b_score_max and c_score_max:
-    key_cars = set([anchor_car, b_sb_low[0], c_sb_low[0], b_score_max[0], c_score_max[0]])
-    pattern_3 = [
-        tuple(sorted(p))
-        for p in combinations(key_cars, 3)
-        if len(set(p)) == 3
-    ]
-    pattern_3 = sorted(set(pattern_3))
+car_2 = next((c for c in get_b2_and_score_max(b_cars) if c not in used_cars), None)
+if car_2:
+    used_cars.add(car_2)
+car_3 = next((c for c in get_b2_and_score_max([car for car in a_line + c_cars if car != anchor_car]) if c not in used_cars), None)
+if car_3:
+    used_cars.add(car_3)
+car_4 = next((c for c in get_score_max(b_cars) if c not in used_cars), None)
+if car_4:
+    used_cars.add(car_4)
+car_5 = next((c for c in get_score_max([car for car in a_line + c_cars if car != anchor_car]) if c not in used_cars), None)
+if car_5:
+    used_cars.add(car_5)
+
+if all([car_2, car_3, car_4, car_5]):
+    pattern_3_info = {
+        "anchor": anchor_car,
+        "穴": sorted([car_2, car_3]),
+        "安定": sorted([car_4, car_5])
+    }
 
 # --- パターン1：◎-◎ライン-漁夫 ---
 pattern_1 = [
@@ -708,5 +715,9 @@ with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
         st.write(f"三連複 {p}")
 
 with st.expander("▶ パターン3：◎-23-45構成（理想フォーメ）", expanded=True):
-    for p in pattern_3:
-        st.write(f"三連複 {p}")
+    if pattern_3_info:
+        st.write(f"◎：{pattern_3_info['anchor']}")
+        st.write(f"穴（23）：{pattern_3_info['穴']}")
+        st.write(f"安定（45）：{pattern_3_info['安定']}")
+    else:
+        st.write("該当なし（構成が成立しないため）")
