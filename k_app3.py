@@ -576,6 +576,7 @@ except NameError:
 
 import pandas as pd
 import streamlit as st
+from itertools import combinations
 
 # --- B回数の補完 ---
 df.rename(columns={"バック": "B回数"}, inplace=True)
@@ -664,8 +665,13 @@ c_score_max = get_score_max([car for car in a_line + c_cars if car != anchor_car
 # --- パターン3：◎-対抗SB少-B/C SB少-対抗スコア高-B/Cスコア高 ---
 pattern_3 = []
 if b_sb_low and c_sb_low and b_score_max and c_score_max:
-    p = tuple(sorted([anchor_car, b_sb_low[0], c_sb_low[0], b_score_max[0], c_score_max[0]]))
-    pattern_3.append(p)
+    key_cars = set([anchor_car, b_sb_low[0], c_sb_low[0], b_score_max[0], c_score_max[0]])
+    pattern_3 = [
+        tuple(sorted(p))
+        for p in combinations(key_cars, 3)
+        if len(set(p)) == 3
+    ]
+    pattern_3 = sorted(set(pattern_3))
 
 # --- パターン1：◎-◎ライン-漁夫 ---
 pattern_1 = [
@@ -686,7 +692,6 @@ pattern_2 = [
 # --- 重複削除・ソート ---
 pattern_1 = sorted(set(pattern_1))
 pattern_2 = sorted(set(pattern_2))
-pattern_3 = sorted(set(pattern_3))
 
 # --- 表示部 ---
 st.markdown("### 🌟 フォーメーション構成")
