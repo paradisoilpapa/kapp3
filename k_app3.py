@@ -657,28 +657,10 @@ def get_score_max(source_cars):
     return [x[0] for x in sub_scores if x[1] == max_score]
 
 # --- 理想構成の抽出（重複排除つき） ---
-pattern_3_info = {}
-used_cars = {anchor_car}
-
-car_2 = next((c for c in get_b2_and_score_max(b_cars) if c not in used_cars), None)
-if car_2:
-    used_cars.add(car_2)
-car_3 = next((c for c in get_b2_and_score_max([car for car in a_line + c_cars if car != anchor_car]) if c not in used_cars), None)
-if car_3:
-    used_cars.add(car_3)
-car_4 = next((c for c in get_score_max(b_cars) if c not in used_cars), None)
-if car_4:
-    used_cars.add(car_4)
-car_5 = next((c for c in get_score_max([car for car in a_line + c_cars if car != anchor_car]) if c not in used_cars), None)
-if car_5:
-    used_cars.add(car_5)
-
-if all([car_2, car_3, car_4, car_5]):
-    pattern_3_info = {
-        "anchor": anchor_car,
-        "穴": sorted([car_2, car_3]),
-        "安定": sorted([car_4, car_5])
-    }
+car_2 = next((c for c in get_b2_and_score_max(b_cars) if c != anchor_car), None)
+car_3 = next((c for c in get_b2_and_score_max([car for car in a_line + c_cars if car != anchor_car and car != car_2])), None)
+car_4 = next((c for c in get_score_max(b_cars) if c != anchor_car and c != car_2 and c != car_3), None)
+car_5 = next((c for c in get_score_max([car for car in a_line + c_cars if car not in [anchor_car, car_2, car_3, car_4]])), None)
 
 # --- パターン1：◎-◎ライン-漁夫 ---
 pattern_1 = [
@@ -715,9 +697,9 @@ with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
         st.write(f"三連複 {p}")
 
 with st.expander("▶ パターン3：◎-23-45構成（理想フォーメ）", expanded=True):
-    if pattern_3_info:
-        st.write(f"◎：{pattern_3_info['anchor']}")
-        st.write(f"穴（23）：{pattern_3_info['穴']}")
-        st.write(f"安定（45）：{pattern_3_info['安定']}")
+    if all([car_2, car_3, car_4, car_5]):
+        st.markdown(f"◎：{anchor_car}")
+        st.markdown(f"穴（23）：{car_2}, {car_3}")
+        st.markdown(f"安定（45）：{car_4}, {car_5}")
     else:
         st.write("該当なし（構成が成立しないため）")
