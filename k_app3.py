@@ -696,10 +696,10 @@ with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
     for p in pattern_2:
         st.write(f"三連複 {p}")
 
-with st.expander("▶ パターン3：◎-23-45構成（理想フォーメ）", expanded=True):
+with st.expander("▶ パターン3：◎-穴-堅実構成（理想フォーメ）", expanded=True):
     if all([car_2, car_3, car_4, car_5]):
         st.markdown(f"◎：{anchor_car}")
-        st.markdown(f"穴（23）：{car_2}, {car_3}")
-        st.markdown(f"安定（45）：{car_4}, {car_5}")
+        st.markdown(f"穴（2列目）：{car_2}, {car_3}")
+        st.markdown(f"安定（3列目）：{car_4}, {car_5}")
     else:
         st.write("該当なし（構成が成立しないため）")
