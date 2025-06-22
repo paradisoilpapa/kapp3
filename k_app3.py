@@ -182,7 +182,7 @@ for k, val in kakushitsu_inputs.items():
     for c in val:
         if c.isdigit():
             n = int(c)
-            if 1 <= n <= 7:
+            if 1 <= n <= 9:
                 car_to_kakushitsu[n] = k
 
 st.subheader("▼ 前々走・前走の着順入力（1〜9着 または 0＝落車）")
@@ -190,7 +190,7 @@ st.subheader("▼ 前々走・前走の着順入力（1〜9着 または 0＝落
 # 7選手 × 2走分
 chaku_inputs = []  # [[前々走, 前走], ..., [前々走, 前走]]
 
-for i in range(7):
+for i in range(9):
     col1, col2 = st.columns(2)
     with col1:
         chaku1 = st.text_input(f"{i+1}番【前々走】", value="", key=f"chaku1_{i}")
@@ -201,31 +201,33 @@ for i in range(7):
 
 
 st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
+rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(9)]
 
 st.subheader("▼ 予想隊列入力（数字、欠の場合は空欄）")
-tairetsu = [st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}") for i in range(7)]
+tairetsu = [st.text_input(f"{i+1}番隊列順位", key=f"tai_{i}") for i in range(9)]
 
 
 # --- S・B 入力（回数を数値で入力） ---
 st.subheader("▼ S・B 入力（各選手のS・B回数を入力）")
 
-for i in range(7):
+for i in range(9):
     st.markdown(f"**{i+1}番**")
     s_val = st.number_input("S回数", min_value=0, max_value=99, value=0, step=1, key=f"s_point_{i+1}")
     b_val = st.number_input("B回数", min_value=0, max_value=99, value=0, step=1, key=f"b_point_{i+1}")
 
 
-# --- ライン構成入力（最大7ライン、単騎含む自由構成） ---
-st.subheader("▼ ライン構成入力（最大7ライン：単騎も1ラインとして扱う）")
+# --- ライン構成入力（最大9ライン、単騎含む自由構成） ---
+st.subheader("▼ ライン構成入力（最大9ライン：単騎も1ラインとして扱う）")
 
-line_1 = st.text_input("ライン1（例：4）", key="line_1", max_chars=7)
-line_2 = st.text_input("ライン2（例：12）", key="line_2", max_chars=7)
-line_3 = st.text_input("ライン3（例：35）", key="line_3", max_chars=7)
-line_4 = st.text_input("ライン4（例：7）", key="line_4", max_chars=7)
-line_5 = st.text_input("ライン5（例：6）", key="line_5", max_chars=7)
-line_6 = st.text_input("ライン6（任意）", key="line_6", max_chars=7)
-line_7 = st.text_input("ライン7（任意）", key="line_7", max_chars=7)
+line_1 = st.text_input("ライン1（例：4）", key="line_1", max_chars=9)
+line_2 = st.text_input("ライン2（例：12）", key="line_2", max_chars=9)
+line_3 = st.text_input("ライン3（例：35）", key="line_3", max_chars=9)
+line_4 = st.text_input("ライン4（例：7）", key="line_4", max_chars=9)
+line_5 = st.text_input("ライン5（例：6）", key="line_5", max_chars=9)
+line_6 = st.text_input("ライン6（任意）", key="line_6", max_chars=9)
+line_7 = st.text_input("ライン7（任意）", key="line_7", max_chars=9)
+line_8 = st.text_input("ライン8（任意）", key="line_8", max_chars=9)
+line_9 = st.text_input("ライン9（任意）", key="line_9", max_chars=9)
 
 
 
@@ -240,7 +242,7 @@ def extract_car_list(input_data):
 
 def build_line_position_map():
     result = {}
-    for line, name in zip([a_line, b_line, c_line, d_line, e_line, f_line, g_line], ['A', 'B', 'C', 'D', 'E', 'F', 'G']):
+    for line, name in zip([a_line, b_line, c_line, d_line, e_line, f_line, g_line, h_line, i_line], ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']):
         cars = extract_car_list(line)
         for i, car in enumerate(cars):
             if name == 'S':
@@ -267,8 +269,8 @@ if st.button("スコア計算実行"):
         df = pd.DataFrame({"得点": tenscore_list})
         df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
     
-        # 基準点：2〜6位の平均
-        baseline = df[df["順位"].between(2, 6)]["得点"].mean()
+        # 基準点：2〜8位の平均
+        baseline = df[df["順位"].between(2, 8)]["得点"].mean()
     
         # 2〜4位だけ補正（差分の3％、必ず正の加点）
         def apply_targeted_correction(row):
@@ -375,9 +377,9 @@ def compute_group_bonus(score_parts, line_def):
 
     # 順位に応じてボーナス値を割当
     bonus_map = {
-        group: [0.25, 0.2, 0.15, 0.1, 0.05, 0.03, 0.01][idx]
+        group: [0.25, 0.2, 0.15, 0.1, 0.08, 0.05, 0.03, 0.02, 0.01][idx]
         for idx, (group, _) in enumerate(sorted_lines)
-        if idx < 7
+        if idx < 9
     }
 
     return bonus_map
@@ -385,7 +387,7 @@ def compute_group_bonus(score_parts, line_def):
 
 
     def get_group_bonus(car_no, line_def, group_bonus_map):
-        for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+        for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
             if car_no in line_def[group]:
                 base_bonus = group_bonus_map.get(group, 0.0)
                 s_bonus = 0.15 if group == 'A' else 0.0  # ← 無条件でAだけに+0.15
@@ -396,7 +398,7 @@ def compute_group_bonus(score_parts, line_def):
 
 # --- ライン構成取得（最大7ライン。単騎含む。自由入力） ---
 lines = []
-for i in range(1, 8):
+for i in range(1, 10):
     input_value = st.session_state.get(f"line_{i}", "")
     if input_value.strip():
         lines.append(extract_car_list(input_value))
@@ -410,7 +412,7 @@ def build_line_position_map(lines):
     return line_order_map
 
 line_order_map = build_line_position_map(lines)
-line_order = [line_order_map.get(i + 1, 0) for i in range(7)]
+line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
 
 
 # --- グループ補正関数（line_defに基づきボーナスマップを作成） ---
@@ -427,7 +429,7 @@ def compute_group_bonus(score_parts, line_def):
                 break
 
     sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
-    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.05, 0.03, 0.01]
+    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.08, 0.05, 0.03, 0.02, 0.01]
     bonus_map = {
         group: bonus_values[idx] if idx < len(bonus_values) else 0.0
         for idx, (group, _) in enumerate(sorted_lines)
@@ -467,7 +469,7 @@ def score_from_tenscore_list(tenscore_list):
 tenscore_score = score_from_tenscore_list(rating)
 score_parts = []
 
-for i in range(7):
+for i in range(9):
     if not tairetsu[i].isdigit():
         continue
 
@@ -523,7 +525,8 @@ def compute_group_bonus(score_parts, line_def):
 
     # 順位を決定（合計スコアベース）
     sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
-    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.05, 0.03, 0.01]
+    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.08, 0.05, 0.03, 0.02, 0.01]
+
     bonus_map = {
         group: bonus_values[idx] if idx < len(bonus_values) else 0.0
         for idx, (group, _) in enumerate(sorted_lines)
@@ -539,7 +542,7 @@ def get_group_bonus(car_no, line_def, bonus_map):
     return 0.0  # 所属なし
 
 # --- line_def 構築（空行除外） ---
-labels = ["A", "B", "C", "D", "E", "F", "G"]
+labels = ["A", "B", "C", "D", "E", "F", "G", "H", "I"]
 line_def = {}
 for idx, line in enumerate(lines):
     if line:  # 空欄チェック
