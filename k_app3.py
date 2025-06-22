@@ -574,68 +574,61 @@ except NameError:
     st.stop()
     
 
-# --- 必要モジュールのインポート ---
 import pandas as pd
 import streamlit as st
 
-# --- B回数列の統一（バック → B回数）---
+# --- B回数の補完 ---
 df.rename(columns={"バック": "B回数"}, inplace=True)
-
-# --- ユーザー入力されたB回数（バック回数）をdfへ格納 ---
 b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
 
-# --- 再発防止のチェック ---
 if len(b_list) != len(df):
-    st.error(f"⚠ B回数の入力数と選手数が一致していません")
+    st.error("⚠ B回数の入力数と選手数が一致していません")
     st.stop()
 
-# --- B回数をdfに格納 ---
 df["B回数"] = b_list
 
-# --- 競争得点（ratingリスト）と車番をDataFrameに変換 ---
+# --- 得点データ構築 ---
 score_df = pd.DataFrame({
-    "車番": list(range(1, 9)),
+    "車番": list(range(1, 8)),
     "得点": rating
 })
 
-# --- 得点順で2〜4位を抽出 ---
+# --- 得点上位2〜4位の中からスコア中位を◎に設定 ---
 subset = score_df.sort_values(by="得点", ascending=False).iloc[1:4]
-target_car_numbers = subset["車番"].tolist()
-
-# --- 該当車番のスコア情報を抽出 ---
-subset_scores = [row for row in final_score_parts if row[0] in target_car_numbers]
-
-# --- スコア順で並べて中央（2番目）を◎に ---
+subset_scores = [row for row in final_score_parts if row[0] in subset["車番"].tolist()]
 subset_scores_sorted = sorted(subset_scores, key=lambda x: x[-1], reverse=True)
-anchor_car = subset_scores_sorted[1][0]  # ◎決定（得点2〜4位内でスコア中位）
+anchor_car = subset_scores_sorted[1][0]  # 中央値 → ◎
 
-# --- ◎の所属ラインを本命ライン（A）として定義 ---
+# --- ライン構築と初期化 ---
 anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
-line_roles = {i: "C" for i in range(len(lines))}  # 初期化：すべて漁夫
-line_roles[anchor_line_idx] = "A"  # 本命ラインを設定
+line_roles = {i: "Z" for i in range(len(lines))}
+line_roles[anchor_line_idx] = "A"
 
-# --- Bライン候補：得点順1〜4位のうち◎以外の所属ライン ---
-b_candidates = score_df.sort_values(by="得点", ascending=False).iloc[:4]
-b_candidates = b_candidates[b_candidates["車番"] != anchor_car]
-b_line_scores = []
+# --- 得点上位1〜4位から◎以外の最上位選手をB候補に設定 ---
+top4_df = score_df.sort_values(by="得点", ascending=False).iloc[:4]
+b_candidates = top4_df[top4_df["車番"] != anchor_car]
 
+if not b_candidates.empty:
+    top_b_car = b_candidates.iloc[0]["車番"]
+    for i, line in enumerate(lines):
+        if top_b_car in line:
+            if i != anchor_line_idx:
+                line_roles[i] = "B"
+            break
+
+# --- Cライン：A/B以外でtop4の誰かが所属するライン ---
+top4_cars = set(top4_df["車番"])
 for i, line in enumerate(lines):
-    if i == anchor_line_idx:
-        continue
-    line_score = b_candidates[b_candidates["車番"].isin(line)]["得点"].sum()
-    if line_score > 0:
-        b_line_scores.append((i, line_score))
+    if line_roles[i] == "Z":
+        if any(car in top4_cars for car in line):
+            line_roles[i] = "C"
 
-if b_line_scores:
-    b_line_idx = max(b_line_scores, key=lambda x: x[1])[0]
-    line_roles[b_line_idx] = "B"
-
-# --- 各役割ラインの車番抽出 ---
+# --- 各ラインから車番抽出 ---
 a_line = lines[anchor_line_idx]
 b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
 c_cars = [car for idx, role in line_roles.items() if role == "C" for car in lines[idx]]
 
-# --- anchorライン内でスコア順ソート ---
+# --- Aライン内で◎以外のスコア順 ---
 anchor_score_sorted = sorted(
     [row for row in final_score_parts if row[0] in a_line],
     key=lambda x: x[-1],
@@ -643,7 +636,30 @@ anchor_score_sorted = sorted(
 )
 anchor_others = [row[0] for row in anchor_score_sorted if row[0] != anchor_car]
 
-# --- パターン①（◎-◎ライン-漁夫）構成 ---
+# --- 対抗・漁夫ライン内のスコアとB回数で候補抽出 ---
+def get_low_sb_cars(source_cars):
+    sub_df = df[df["車番"].isin(source_cars)].copy()
+    sub_scores = {row[0]: row[-1] for row in final_score_parts if row[0] in source_cars}
+    sub_df["スコア"] = sub_df["車番"].map(sub_scores)
+    sub_df["S+B"] = sub_df[["S", "B回数"]].sum(axis=1)
+    sb_min = sub_df["S+B"].min()
+    score_max = sub_df["スコア"].max()
+    sb_cand = sub_df[sub_df["S+B"] == sb_min]
+    final = sb_cand[sb_cand["スコア"] == score_max]
+    return final["車番"].tolist()
+
+# --- 候補抽出 ---
+b_sb_low = get_low_sb_cars(b_cars)
+c_sb_low = get_low_sb_cars(c_cars)
+
+# --- パターン3：◎-S+B最小-スコア最大 ---
+pattern_3 = []
+for x in b_sb_low + c_sb_low:
+    for y in b_cars + c_cars:
+        if x != y and anchor_car not in (x, y):
+            pattern_3.append(tuple(sorted([anchor_car, x, y])))
+
+# --- パターン1：◎-◎ライン-漁夫 ---
 pattern_1 = [
     tuple(sorted([anchor_car, x, y]))
     for x in anchor_others
@@ -651,28 +667,33 @@ pattern_1 = [
     if len(set([anchor_car, x, y])) == 3
 ]
 
-# anchor（◎）を除いた対抗ラインの車番で構成
+# --- パターン２：対抗-対抗-◎ ---
 b_only = [car for car in b_cars if car != anchor_car]
-
 pattern_2 = [
     tuple(sorted([x, y, anchor_car]))
     for i, x in enumerate(b_only)
     for y in b_only[i+1:]
 ]
 
-# --- 重複除去・ソート ---
+# --- 重複削除・ソート ---
 pattern_1 = sorted(set(pattern_1))
 pattern_2 = sorted(set(pattern_2))
+pattern_3 = sorted(set(pattern_3))
 
-# --- 表示 ---
+# --- 表示部 ---
 st.markdown("### 🌟 フォーメーション構成")
-st.markdown(f"◆ 本線ライン（◎が所属）: {anchor_car} in {a_line}")
-st.markdown(f"◆ 対抗ライン: {b_cars} ／ 漁夫ライン: {c_cars}")
+st.markdown(f"◎：{anchor_car} ／ 本命ライン（A）：{a_line}")
+st.markdown(f"対抗ライン（B）：{b_cars if b_cars else '該当なし'}")
+st.markdown(f"漁夫ライン（C）：{c_cars if c_cars else '該当なし'}")
 
-st.markdown("#### ▶ パターン1：◎-◎ライン-漁夫")
-for p in pattern_1:
-    st.write(f"三連複 {p}")
+with st.expander("▶ パターン1：◎-◎ライン-漁夫", expanded=True):
+    for p in pattern_1:
+        st.write(f"三連複 {p}")
 
-st.markdown("#### ▶ パターン2：対抗-対抗-◎")
-for p in pattern_2:
-    st.write(f"三連複 {p}")
+with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
+    for p in pattern_2:
+        st.write(f"三連複 {p}")
+
+with st.expander("▶ パターン3：◎-S+B最小-スコア最大", expanded=True):
+    for p in pattern_3:
+        st.write(f"三連複 {p}")
