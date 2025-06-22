@@ -219,13 +219,13 @@ for i in range(7):
 # --- ライン構成入力（最大7ライン、単騎含む自由構成） ---
 st.subheader("▼ ライン構成入力（最大7ライン：単騎も1ラインとして扱う）")
 
-line_1 = st.text_input("ライン1（例：4）", key="line_1", max_chars=9)
-line_2 = st.text_input("ライン2（例：12）", key="line_2", max_chars=9)
-line_3 = st.text_input("ライン3（例：35）", key="line_3", max_chars=9)
-line_4 = st.text_input("ライン4（例：7）", key="line_4", max_chars=9)
-line_5 = st.text_input("ライン5（例：6）", key="line_5", max_chars=9)
-line_6 = st.text_input("ライン6（任意）", key="line_6", max_chars=9)
-line_7 = st.text_input("ライン7（任意）", key="line_7", max_chars=9)
+line_1 = st.text_input("ライン1（例：4）", key="line_1", max_chars=7)
+line_2 = st.text_input("ライン2（例：12）", key="line_2", max_chars=7)
+line_3 = st.text_input("ライン3（例：35）", key="line_3", max_chars=7)
+line_4 = st.text_input("ライン4（例：7）", key="line_4", max_chars=7)
+line_5 = st.text_input("ライン5（例：6）", key="line_5", max_chars=7)
+line_6 = st.text_input("ライン6（任意）", key="line_6", max_chars=7)
+line_7 = st.text_input("ライン7（任意）", key="line_7", max_chars=7)
 
 
 
@@ -240,7 +240,7 @@ def extract_car_list(input_data):
 
 def build_line_position_map():
     result = {}
-    for line, name in zip([a_line, b_line, c_line, d_line, solo_line], ['A', 'B', 'C', 'D', 'S']):
+    for line, name in zip([a_line, b_line, c_line, d_line, e_line, f_line, g_line], ['A', 'B', 'C', 'D', 'E', 'F', 'G']):
         cars = extract_car_list(line)
         for i, car in enumerate(cars):
             if name == 'S':
@@ -261,6 +261,25 @@ if st.button("スコア計算実行"):
         else:
             return []
 
+    def score_from_tenscore_list(tenscore_list):
+        import pandas as pd
+    
+        df = pd.DataFrame({"得点": tenscore_list})
+        df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
+    
+        # 基準点：2〜6位の平均
+        baseline = df[df["順位"].between(2, 6)]["得点"].mean()
+    
+        # 2〜4位だけ補正（差分の3％、必ず正の加点）
+        def apply_targeted_correction(row):
+            if row["順位"] in [2, 3, 4]:
+                correction = abs(baseline - row["得点"]) * 0.03
+                return round(correction, 3)
+            else:
+                return 0.0
+
+        df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
+        return df["最終補正値"].tolist()
 
 
 
@@ -284,20 +303,23 @@ if st.button("スコア計算実行"):
 
     def convert_chaku_to_score(values):
         scores = []
-        for i, v in enumerate(values):  # i=0: 前走, i=1: 前々走
+        for i, v in enumerate(values):
             v = v.strip()
             try:
                 chaku = int(v)
                 if 1 <= chaku <= 9:
                     score = (10 - chaku) / 9
-                    if i == 1:  # 前々走のみ補正
+                    if i == 1:
                         score *= 0.35
                     scores.append(score)
             except ValueError:
                 continue
         if not scores:
-            return None
+            return 0.0
         return round(sum(scores) / len(scores), 2)
+
+
+
 
 
     def lap_adjust(kaku, laps):
@@ -363,7 +385,7 @@ def compute_group_bonus(score_parts, line_def):
 
 
     def get_group_bonus(car_no, line_def, group_bonus_map):
-        for group in ['A', 'B', 'C', 'D']:
+        for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
             if car_no in line_def[group]:
                 base_bonus = group_bonus_map.get(group, 0.0)
                 s_bonus = 0.15 if group == 'A' else 0.0  # ← 無条件でAだけに+0.15
@@ -379,7 +401,7 @@ for i in range(1, 8):
     if input_value.strip():
         lines.append(extract_car_list(input_value))
 
-# --- 各車番のライン順を取得（1〜9番車） ---
+# --- 各車番のライン順を取得（1〜7番車） ---
 def build_line_position_map(lines):
     line_order_map = {}
     for idx, line in enumerate(lines):
@@ -388,27 +410,8 @@ def build_line_position_map(lines):
     return line_order_map
 
 line_order_map = build_line_position_map(lines)
-line_order = [line_order_map.get(i + 1, 0) for i in range(9)]
+line_order = [line_order_map.get(i + 1, 0) for i in range(7)]
 
-def score_from_tenscore_list(tenscore_list):
-    import pandas as pd
-
-    df = pd.DataFrame({"得点": tenscore_list})
-    df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
-
-    # 基準点：2〜6位の平均
-    baseline = df[df["順位"].between(2, 6)]["得点"].mean()
-
-    # 2〜4位だけ補正（差分の3％、必ず正の加点）
-    def apply_targeted_correction(row):
-        if row["順位"] in [2, 3, 4]:
-            correction = abs(baseline - row["得点"]) * 0.03
-            return round(correction, 3)
-        else:
-            return 0.0
-
-    df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
-    return df["最終補正値"].tolist()
 
 # --- グループ補正関数（line_defに基づきボーナスマップを作成） ---
 def compute_group_bonus(score_parts, line_def):
@@ -439,6 +442,26 @@ def get_group_bonus(car_no, line_def, bonus_map):
             return bonus_map.get(group, 0.0)
     return 0.0
 
+# ✅ 追加：競争得点補正値を返す関数
+def score_from_tenscore_list(tenscore_list):
+    import pandas as pd
+
+    df = pd.DataFrame({"得点": tenscore_list})
+    df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
+
+    # 基準点：2〜6位の平均
+    baseline = df[df["順位"].between(2, 6)]["得点"].mean()
+
+    # 2〜4位だけ補正（差分の3％、必ず正の加点）
+    def apply_targeted_correction(row):
+        if row["順位"] in [2, 3, 4]:
+            correction = abs(baseline - row["得点"]) * 0.03
+            return round(correction, 3)
+        else:
+            return 0.0
+
+    df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
+    return df["最終補正値"].tolist()
 
 # --- スコア計算 ---
 tenscore_score = score_from_tenscore_list(rating)
@@ -477,6 +500,7 @@ for i in range(7):
         num, kaku, base, wind, kasai, rating_score,
         rain_corr, symbol_score, line_bonus, bank_bonus, length_bonus, total
     ])
+
 
 # --- グループ補正関数（line_defに基づきボーナスマップを作成） ---
 def compute_group_bonus(score_parts, line_def):
