@@ -578,6 +578,8 @@ except NameError:
 kakutoku_scores = rating  # 得点入力（7人）
 final_scores = final_score_parts  # スコア（7人）
 
+import streamlit as st
+
 # --- 構造化 ---
 car_indices = list(range(1, 8))
 data = []
@@ -632,10 +634,12 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- 結果出力（Streamlit用は別途処理） ---
-print("◎（1列目）：", first_row)
-print("2列目（得点1〜4位スコア上位3車）：", second_row)
-print("3列目（スコア1位＋得点1・2位からヒモ）：", third_row)
-print(f"\n👉 三連複 {len(bets)}点：")
+# --- 結果出力（Streamlit表示） ---
+st.markdown("### 🎯 フォーメーション構成")
+st.markdown(f"◎（1列目）：{first_row}")
+st.markdown(f"2列目（得点1〜4位スコア上位3車）：{second_row}")
+st.markdown(f"3列目（スコア1位＋得点1・2位からヒモ）：{third_row}")
+
+st.markdown(f"👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
-    print(b)
+    st.markdown(str(b))
