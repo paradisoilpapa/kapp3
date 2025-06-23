@@ -574,8 +574,9 @@ except NameError:
     st.stop()
     
 
-
+import streamlit as st
 import itertools
+
 
 # --- 入力例（7車分） ---
 # 競争得点（Streamlit側から）
@@ -648,10 +649,12 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- 結果出力 ---
-print("◎（1列目）：", first_row)
-print("2列目（得点1〜4位スコア上位2〜4位）：", second_row)
-print("3列目（スコア1位＋得点1・2位のライン内スコア上位1車）：", third_row)
-print(f"\n👉 三連複 {len(bets)}点：")
+# 最後に表示する部分だけ修正例
+st.markdown("### 🎯 フォーメーション構成")
+st.markdown(f"◎（1列目）：{first_row}")
+st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
+st.markdown(f"3列目（スコア1位＋得点1・2位のライン内スコア上位1車）：{third_row}")
+
+st.markdown(f"👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
-    print(b)
+    st.markdown(f"- {b}")
