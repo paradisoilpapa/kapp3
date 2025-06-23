@@ -576,6 +576,7 @@ except NameError:
 
 
 import itertools
+import streamlit as st
 
 # --- 入力例（7車分） ---
 # 競争得点（Streamlit側から）
@@ -600,59 +601,40 @@ top_1_2 = [d for d in score_df if d["得点順位"] in [1, 2]]
 top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
 
 if not top_1_2 or not top_3_4:
-    raise ValueError("競争得点上位4人が不足しています")
+    st.error("競争得点上位4人が不足しています")
+else:
+    w1 = max(top_1_2, key=lambda x: x["スコア"])
+    w2 = max(top_3_4, key=lambda x: x["スコア"])
+    first_row = [w1["車番"], w2["車番"]]
+    anchor_car = w1["車番"]
 
-w1 = max(top_1_2, key=lambda x: x["スコア"])
-w2 = max(top_3_4, key=lambda x: x["スコア"])
-first_row = [w1["車番"], w2["車番"]]
-anchor_car = w1["車番"]
+    # --- 2列目：競争得点上位4名の中からスコア上位3車 ---
+    top4 = [d for d in score_df if d["得点順位"] <= 4]
+    top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
+    second_row = [d["車番"] for d in top4_sorted_by_score[:3]]
 
-# --- 2列目：競争得点上位4名の中からスコア上位3車 ---
-top4 = [d for d in score_df if d["得点順位"] <= 4]
-top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
-second_row = [d["車番"] for d in top4_sorted_by_score[:3]]
+    # --- 3列目：スコア1位＋競争得点1・2位の中のヒモ1車 ---
+    score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
+    top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
+    top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
+    third_row = [score1_car]
+    if top1_2_cars_sorted:
+        third_row.append(top1_2_cars_sorted[0]["車番"])
 
-# --- 3列目：スコア1位＋競争得点1・2位の中のヒモ1車 ---
-score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
-top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
-top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
-third_row = [score1_car]
-if top1_2_cars_sorted:
-    third_row.append(top1_2_cars_sorted[0]["車番"])
+    # --- フォーメーション作成（三連複） ---
+    bets = set()
+    for a in first_row:
+        for b in second_row:
+            for c in third_row:
+                combo = tuple(sorted([a, b, c]))
+                if len(set(combo)) == 3:
+                    bets.add(combo)
 
-# --- フォーメーション作成（三連複） ---
-bets = set()
-for a in first_row:
-    for b in second_row:
-        for c in third_row:
-            combo = tuple(sorted([a, b, c]))
-            if len(set(combo)) == 3:
-                bets.add(combo)
-
-# --- 結果出力 ---
-print("◎（1列目）：", first_row)
-print("2列目（得点1〜4位スコア上位3車）：", second_row)
-print("3列目（スコア1位＋得点1・2位のヒモ）：", third_row)
-print(f"\n👉 三連複 {len(bets)}点：")
-for b in sorted(bets):
-    print(b)
-
-# --- 理想フォーメ（◎-穴-堅実構成）のチェック表示 ---
-with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォーメ成立すればＧｏ）", expanded=True):
-    try:
-        # 穴：得点3・4位からスコア上位2車
-        hole_candidates = sorted(top_3_4, key=lambda x: x["スコア"], reverse=True)
-        hole = [d["車番"] for d in hole_candidates[:2]]
-
-        # 安定：top4から穴を除いたスコア上位2車
-        stable_candidates = [d for d in top4_sorted_by_score if d["車番"] not in hole]
-        stable = [d["車番"] for d in stable_candidates[:2]]
-
-        if len(hole) == 2 and len(stable) == 2:
-            st.markdown(f"◎：{anchor_car}")
-            st.markdown(f"穴（2列目）：{hole[0]}, {hole[1]}")
-            st.markdown(f"安定（3列目）：{stable[0]}, {stable[1]}")
-        else:
-            st.write("該当なし（構成が成立しないため）")
-    except:
-        st.write("該当なし（構成が成立しないため）")
+    # --- 結果出力（Streamlit） ---
+    st.markdown("### 🎯 フォーメーション構成")
+    st.markdown(f"◎（1列目）：{first_row}")
+    st.markdown(f"2列目（得点1〜4位スコア上位3車）：{second_row}")
+    st.markdown(f"3列目（スコア1位＋得点1・2位のヒモ）：{third_row}")
+    st.markdown(f"\n👉 三連複 {len(bets)}点：")
+    for b in sorted(bets):
+        st.markdown(f"{b}")
