@@ -601,40 +601,40 @@ top_1_2 = [d for d in score_df if d["得点順位"] in [1, 2]]
 top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
 
 if not top_1_2 or not top_3_4:
-    st.error("競争得点上位4人が不足しています")
-else:
-    w1 = max(top_1_2, key=lambda x: x["スコア"])
-    w2 = max(top_3_4, key=lambda x: x["スコア"])
-    first_row = [w1["車番"], w2["車番"]]
-    anchor_car = w1["車番"]
+    raise ValueError("競争得点上位4人が不足しています")
 
-    # --- 2列目：競争得点上位4名の中からスコア上位3車 ---
-    top4 = [d for d in score_df if d["得点順位"] <= 4]
-    top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
-    second_row = [d["車番"] for d in top4_sorted_by_score[:3]]
+w1 = max(top_1_2, key=lambda x: x["スコア"])
+w2 = max(top_3_4, key=lambda x: x["スコア"])
+first_row = [w1["車番"], w2["車番"]]
+anchor_car = w1["車番"]
 
-    # --- 3列目：スコア1位＋競争得点1・2位の中のヒモ1車 ---
-    score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
-    top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
-    top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
-    third_row = [score1_car]
-    if top1_2_cars_sorted:
-        third_row.append(top1_2_cars_sorted[0]["車番"])
+# --- 2列目：得点1〜4位の中からスコア上位2〜4位を選出 ---
+top4 = [d for d in score_df if d["得点順位"] <= 4]
+top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
+second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]
 
-    # --- フォーメーション作成（三連複） ---
-    bets = set()
-    for a in first_row:
-        for b in second_row:
-            for c in third_row:
-                combo = tuple(sorted([a, b, c]))
-                if len(set(combo)) == 3:
-                    bets.add(combo)
+# --- 3列目：スコア1位＋競争得点1・2位の中のヒモ1車 ---
+score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
+top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
+top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
+third_row = [score1_car]
+if top1_2_cars_sorted:
+    third_row.append(top1_2_cars_sorted[0]["車番"])
 
-    # --- 結果出力（Streamlit） ---
-    st.markdown("### 🎯 フォーメーション構成")
-    st.markdown(f"◎（1列目）：{first_row}")
-    st.markdown(f"2列目（得点1〜4位スコア上位3車）：{second_row}")
-    st.markdown(f"3列目（スコア1位＋得点1・2位のヒモ）：{third_row}")
-    st.markdown(f"\n👉 三連複 {len(bets)}点：")
-    for b in sorted(bets):
-        st.markdown(f"{b}")
+# --- フォーメーション作成（三連複） ---
+bets = set()
+for a in first_row:
+    for b in second_row:
+        for c in third_row:
+            combo = tuple(sorted([a, b, c]))
+            if len(set(combo)) == 3:
+                bets.add(combo)
+
+# --- 結果出力 ---
+st.markdown("### 🎯 フォーメーション構成")
+st.markdown(f"◎（1列目）：{first_row}")
+st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
+st.markdown(f"3列目（スコア1位＋得点1・2位のヒモ）：{third_row}")
+st.markdown(f"\n👉 三連複 {len(bets)}点：")
+for b in sorted(bets):
+    st.markdown(f"{b}")
