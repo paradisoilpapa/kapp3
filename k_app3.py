@@ -574,58 +574,52 @@ except NameError:
     st.stop()
     
 
-# --- データ例：得点とスコア（Streamlitから入力される前提） ---
-kakutoku_scores = rating  # 得点入力（7人）
-final_scores = final_score_parts  # スコア（7人）
+import itertools
 
-import streamlit as st
+# --- 入力例（7車分） ---
+# 競争得点（Streamlit側から）
+kakutoku_scores = rating
+# スコアは未使用（補正なしで運用）
+# ライン構成（Streamlit側から）
+# lines = [[1, 3], [2, 4], [5, 6], [7]] ← Streamlit側と統合済み前提
 
-# --- 構造化 ---
+# --- 準備 ---
 car_indices = list(range(1, 8))
-data = []
-for i in range(7):
-    data.append({
-        "車番": car_indices[i],
-        "得点": kakutoku_scores[i],
-        "スコア": final_scores[i][-1]  # final_score_parts = [car_no, ..., score] 形式想定
-    })
+score_df = [
+    {"車番": i, "得点": kakutoku_scores[i-1], "スコア": kakutoku_scores[i-1]} for i in car_indices
+]
 
-# --- 得点順位付け ---
-data.sort(key=lambda x: x["得点"], reverse=True)
-for idx, row in enumerate(data):
-    row["得点順位"] = idx + 1
+# 得点順位をつける
+score_df.sort(key=lambda x: x["得点"], reverse=True)
+for rank, d in enumerate(score_df, 1):
+    d["得点順位"] = rank
 
-# --- スコア順位付け ---
-data.sort(key=lambda x: x["スコア"], reverse=True)
-for idx, row in enumerate(data):
-    row["スコア順位"] = idx + 1
+# --- 1列目（W軸）選出 ---
+top_1_2 = [d for d in score_df if d["得点順位"] in [1, 2]]
+top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
 
-# --- 1列目：得点1-2位からスコア上位1車 + 得点3-4位からスコア上位1車 ---
-top12 = [d for d in data if d["得点順位"] in [1, 2]]
-top34 = [d for d in data if d["得点順位"] in [3, 4]]
+if not top_1_2 or not top_3_4:
+    raise ValueError("競争得点上位4人が不足しています")
 
-first_row = []
-if top12:
-    first_row.append(sorted(top12, key=lambda x: x["スコア"])[-1]["車番"])
-if top34:
-    first_row.append(sorted(top34, key=lambda x: x["スコア"])[-1]["車番"])
+w1 = max(top_1_2, key=lambda x: x["スコア"])
+w2 = max(top_3_4, key=lambda x: x["スコア"])
+first_row = [w1["車番"], w2["車番"]]
+anchor_car = w1["車番"]
 
-# --- 2列目：得点1〜4位の中からスコア上位3車 ---
-top1234 = [d for d in data if d["得点順位"] in [1, 2, 3, 4]]
-top1234_sorted = sorted(top1234, key=lambda x: x["スコア"], reverse=True)
-second_row = [d["車番"] for d in top1234_sorted[:3]]
+# --- 2列目：競争得点上位4名 ---
+top4 = [d for d in score_df if d["得点順位"] <= 4]
+top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
+second_row = [d["車番"] for d in top4_sorted_by_score[:3]]
 
-# --- 3列目：スコア1位の選手 + 得点1・2位からスコア上位のヒモ1車 ---
-score_1_car = sorted(data, key=lambda x: x["スコア"], reverse=True)[0]["車番"]
-top12_himos = [d for d in top12 if d["車番"] != first_row[0]]
+# --- 3列目：スコア1位＋競争得点1・2位からヒモ（スコア順） ---
+score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
+top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
+top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
+third_row = [score1_car]
+if top1_2_cars_sorted:
+    third_row.append(top1_2_cars_sorted[0]["車番"])
 
-if top12_himos:
-    top_himo = sorted(top12_himos, key=lambda x: x["スコア"], reverse=True)[0]["車番"]
-    third_row = [score_1_car, top_himo]
-else:
-    third_row = [score_1_car]
-
-# --- フォーメーション（三連複） ---
+# --- フォーメーション作成（三連複） ---
 bets = set()
 for a in first_row:
     for b in second_row:
@@ -634,12 +628,26 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- 結果出力（Streamlit表示） ---
-st.markdown("### 🎯 フォーメーション構成")
-st.markdown(f"◎（1列目）：{first_row}")
-st.markdown(f"2列目（得点1〜4位スコア上位3車）：{second_row}")
-st.markdown(f"3列目（スコア1位＋得点1・2位からヒモ）：{third_row}")
-
-st.markdown(f"👉 三連複 {len(bets)}点：")
+# --- 結果出力 ---
+print("◎（W軸）：", first_row)
+print("2列目（得点1〜4位スコア上位3車）：", second_row)
+print(f"3列目（スコア1位＋得点1・2位のヒモ）：", third_row)
+print(f"\n👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
-    st.markdown(str(b))
+    print(b)
+
+# --- 理想フォーメ（◎-穴-堅実構成）のチェック表示 ---
+with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォーメ成立すればＧｏ）", expanded=True):
+    try:
+        car_2 = top_3_4[0]["車番"]
+        car_3 = top_3_4[1]["車番"] if len(top_3_4) > 1 else None
+        car_4 = top4_sorted_by_score[2]["車番"] if len(top4_sorted_by_score) > 2 else None
+        car_5 = top4_sorted_by_score[3]["車番"] if len(top4_sorted_by_score) > 3 else None
+        if all([car_2, car_3, car_4, car_5]):
+            st.markdown(f"◎：{anchor_car}")
+            st.markdown(f"穴（2列目）：{car_2}, {car_3}")
+            st.markdown(f"安定（3列目）：{car_4}, {car_5}")
+        else:
+            st.write("該当なし（構成が成立しないため）")
+    except:
+        st.write("該当なし（構成が成立しないため）")
