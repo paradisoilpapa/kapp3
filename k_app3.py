@@ -574,30 +574,30 @@ except NameError:
     st.stop()
     
 
-import streamlit as st
 import pandas as pd
 import itertools
+import streamlit as st
 
-# --- 競争得点をユーザー入力から取得（例） ---
-st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
+# --- 競争得点はすでにStreamlitで取得済みの変数ratingを使用 ---
+# rating = [st.number_input(...)] は別箇所で実行されている想定
 
+# --- final_score_parts は既に計算済みの得点補正など含むスコアリスト ---
+# final_score_parts = [...] ここも別で準備されている前提
 
-# --- 例として final_score_parts から DataFrame作成 ---
-# final_score_parts は実際のデータ構造に合わせてください
+# DataFrame化
 df = pd.DataFrame(final_score_parts, columns=[
     '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
     '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
     'グループ補正', '合計スコア'
 ])
 
-# --- 競争得点を DataFrame に追加 ---
+# rating（競争得点）を追加
 df['競争得点'] = rating
 
-# --- 競争得点順位を付与 ---
+# 競争得点順位を付与（大きい順）
 df['競争得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
 
-# --- スコア情報を dict リストに変換 ---
+# スコア情報を辞書リストに変換
 score_df = [
     {
         "車番": int(row["車番"]),
@@ -608,7 +608,7 @@ score_df = [
     for _, row in df.iterrows()
 ]
 
-# --- 1列目（W軸）選出 ---
+# 1列目（W軸）選出（競争得点1・2位のスコア上位1台、競争得点3・4位のスコア上位1台）
 top_1_2 = sorted([d for d in score_df if d["得点順位"] in [1, 2]], key=lambda x: x["スコア"], reverse=True)
 top_3_4 = sorted([d for d in score_df if d["得点順位"] in [3, 4]], key=lambda x: x["スコア"], reverse=True)
 
@@ -616,16 +616,16 @@ w1 = top_1_2[0]
 w2 = top_3_4[0]
 first_row = [w1["車番"], w2["車番"]]
 
-# --- 2列目：競争得点上位4名の中からスコア上位2〜4位 ---
+# 2列目（競争得点1～4位の中からスコア上位2～4位）
 top4 = [d for d in score_df if d["得点順位"] <= 4]
 top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
 second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]
 
-# --- 3列目：スコア1位＋競争得点1・2位に属するライン内スコア上位1車 ---
+# 3列目（スコア1位＋競争得点1・2位のライン内スコア上位1台）
 score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
 third_row = [score1_car]
 
-# --- ライン構成はユーザー入力等から取得（例） ---
+# ライン構成（Streamlitで入力済み想定）
 lines = [
     [1, 3],
     [2, 4],
@@ -641,14 +641,13 @@ for ac in anchor_candidates:
             anchor_lines.append(line)
             break
 
-import itertools
 line_candidates = list(set(itertools.chain.from_iterable(anchor_lines)))
 line_candidates = [d for d in score_df if d["車番"] in line_candidates and d["車番"] != score1_car]
 line_candidates_sorted = sorted(line_candidates, key=lambda x: x["スコア"], reverse=True)
 if line_candidates_sorted:
     third_row.append(line_candidates_sorted[0]["車番"])
 
-# --- 三連複フォーメーション作成 ---
+# 三連複組合せ生成
 bets = set()
 for a in first_row:
     for b in second_row:
@@ -657,7 +656,7 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- Streamlit 画面表示 ---
+# 表示
 st.markdown("### 🎯 フォーメーション構成")
 st.markdown(f"◎（1列目）：{first_row}")
 st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
@@ -667,6 +666,5 @@ st.markdown(f"👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
     st.markdown(f"- {b}")
 
-# --- 競争得点順位含むDataFrame表示 ---
 st.markdown("### 競争得点順位含む選手情報")
 st.dataframe(df.sort_values(by='競争得点順位'))
