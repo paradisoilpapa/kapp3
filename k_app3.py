@@ -580,7 +580,6 @@ import itertools
 
 st.title("競輪フォーメーション計算")
 
-# 初期化
 if "calculated" not in st.session_state:
     st.session_state.calculated = False
 
@@ -588,7 +587,7 @@ if not st.session_state.calculated:
     st.subheader("▼ 競争得点入力")
     rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
 
-    if st.button("スコア計算実行"):
+    if st.button("スコア計算実行", key="calc_button"):
         st.session_state.rating = rating
         st.session_state.calculated = True
         st.experimental_rerun()
@@ -596,7 +595,6 @@ if not st.session_state.calculated:
 else:
     rating = st.session_state.rating
 
-    # サンプル補正スコアデータ
     final_score_parts = [
         [1, "逃", 4.8, 0, 0.32, 0, 0, 0, -0.03, 0.25, -0.02, -0.15, 5.37],
         [2, "逃", 4.7, 0, 0.22, 0, 0, -0.2, 0, 0.3, -0.08, -0.07, 5.02],
@@ -692,6 +690,7 @@ else:
     st.markdown("### 競争得点順位含む選手情報")
     st.dataframe(df.sort_values(by='競争得点順位'))
 
-    if st.button("リセット"):
+    if st.button("リセット", key="reset_button"):
         st.session_state.calculated = False
         st.experimental_rerun()
+
