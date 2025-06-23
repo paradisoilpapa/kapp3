@@ -574,6 +574,7 @@ except NameError:
     st.stop()
     
 
+
 import itertools
 
 # --- 入力例（7車分） ---
@@ -606,12 +607,12 @@ w2 = max(top_3_4, key=lambda x: x["スコア"])
 first_row = [w1["車番"], w2["車番"]]
 anchor_car = w1["車番"]
 
-# --- 2列目：競争得点上位4名 ---
+# --- 2列目：競争得点上位4名の中からスコア上位3車 ---
 top4 = [d for d in score_df if d["得点順位"] <= 4]
 top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
 second_row = [d["車番"] for d in top4_sorted_by_score[:3]]
 
-# --- 3列目：スコア1位＋競争得点1・2位からヒモ（スコア順） ---
+# --- 3列目：スコア1位＋競争得点1・2位の中のヒモ1車 ---
 score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
 top1_2_cars = [d for d in score_df if d["得点順位"] in [1, 2] and d["車番"] != score1_car]
 top1_2_cars_sorted = sorted(top1_2_cars, key=lambda x: x["スコア"], reverse=True)
@@ -629,9 +630,9 @@ for a in first_row:
                 bets.add(combo)
 
 # --- 結果出力 ---
-print("◎（W軸）：", first_row)
+print("◎（1列目）：", first_row)
 print("2列目（得点1〜4位スコア上位3車）：", second_row)
-print(f"3列目（スコア1位＋得点1・2位のヒモ）：", third_row)
+print("3列目（スコア1位＋得点1・2位のヒモ）：", third_row)
 print(f"\n👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
     print(b)
@@ -639,14 +640,18 @@ for b in sorted(bets):
 # --- 理想フォーメ（◎-穴-堅実構成）のチェック表示 ---
 with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォーメ成立すればＧｏ）", expanded=True):
     try:
-        car_2 = top_3_4[0]["車番"]
-        car_3 = top_3_4[1]["車番"] if len(top_3_4) > 1 else None
-        car_4 = top4_sorted_by_score[2]["車番"] if len(top4_sorted_by_score) > 2 else None
-        car_5 = top4_sorted_by_score[3]["車番"] if len(top4_sorted_by_score) > 3 else None
-        if all([car_2, car_3, car_4, car_5]):
+        # 穴：得点3・4位からスコア上位2車
+        hole_candidates = sorted(top_3_4, key=lambda x: x["スコア"], reverse=True)
+        hole = [d["車番"] for d in hole_candidates[:2]]
+
+        # 安定：top4から穴を除いたスコア上位2車
+        stable_candidates = [d for d in top4_sorted_by_score if d["車番"] not in hole]
+        stable = [d["車番"] for d in stable_candidates[:2]]
+
+        if len(hole) == 2 and len(stable) == 2:
             st.markdown(f"◎：{anchor_car}")
-            st.markdown(f"穴（2列目）：{car_2}, {car_3}")
-            st.markdown(f"安定（3列目）：{car_4}, {car_5}")
+            st.markdown(f"穴（2列目）：{hole[0]}, {hole[1]}")
+            st.markdown(f"安定（3列目）：{stable[0]}, {stable[1]}")
         else:
             st.write("該当なし（構成が成立しないため）")
     except:
