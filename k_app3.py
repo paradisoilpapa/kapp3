@@ -595,7 +595,7 @@ final_score_parts = [
 ]
 
 # Streamlit入力例（実際は入力画面で）
-rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
+rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
 
 df = pd.DataFrame(final_score_parts, columns=[
     '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
@@ -690,4 +690,5 @@ for b in sorted(bets):
 
 st.markdown("### 競争得点順位含む選手情報")
 st.dataframe(df.sort_values(by='競争得点順位'))
+
 
