@@ -578,14 +578,17 @@ import streamlit as st
 import pandas as pd
 import itertools
 
-st.title("競輪フォーメーション計算")
-
+# セッション状態初期化
 if "calculated" not in st.session_state:
     st.session_state.calculated = False
+if "rating" not in st.session_state:
+    st.session_state.rating = [55.0] * 7  # 初期値
+
+st.title("競輪フォーメーション計算")
 
 if not st.session_state.calculated:
     st.subheader("▼ 競争得点入力")
-    rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
+    rating = [st.number_input(f"{i+1}番競争得点", value=st.session_state.rating[i], step=0.1, key=f"rate_unique_{i}") for i in range(7)]
 
     if st.button("スコア計算実行", key="calc_button"):
         st.session_state.rating = rating
@@ -595,102 +598,26 @@ if not st.session_state.calculated:
 else:
     rating = st.session_state.rating
 
+    # ここに計算ロジックを記述（final_score_partsの生成など）
+
+    # 例のfinal_score_partsデータ
     final_score_parts = [
         [1, "逃", 4.8, 0, 0.32, 0, 0, 0, -0.03, 0.25, -0.02, -0.15, 5.37],
         [2, "逃", 4.7, 0, 0.22, 0, 0, -0.2, 0, 0.3, -0.08, -0.07, 5.02],
-        [3, "追", 4.7, 0, 0.25, 0, 0, 0, 0, 0.2, 0, 0, 5.10],
-        [4, "両", 4.8, 0, 0.28, 0, 0, 0, 0, 0.25, 0, 0, 5.5],
-        [5, "両", 4.8, 0, 0.3, 0, 0, 0, 0, 0.25, 0, 0, 5.6],
-        [6, "追", 4.7, 0, 0.26, 0, 0, 0, 0, 0.2, 0, 0, 5.3],
-        [7, "両", 4.8, 0, 0.31, 0, 0, 0, 0, 0.3, 0, 0, 5.7]
+        # ...省略...
     ]
 
-    df = pd.DataFrame(final_score_parts, columns=[
-        '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
-        '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
-        'グループ補正', '合計スコア'
-    ])
+    # DataFrame作成
+    df = pd.DataFrame(final_score_parts, columns=[ ... ])
     df['競争得点'] = rating
     df['競争得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
 
-    score_df = [
-        {
-            "車番": int(row["車番"]),
-            "得点": float(row["競争得点"]),
-            "得点順位": int(row["競争得点順位"]),
-            "スコア": float(row["合計スコア"])
-        }
-        for _, row in df.iterrows()
-    ]
+    # ここにフォーメーション作成ロジックなど
 
-    top_1_2 = sorted([d for d in score_df if d["得点順位"] in [1, 2]], key=lambda x: x["スコア"], reverse=True)
-    top_3_4 = sorted([d for d in score_df if d["得点順位"] in [3, 4]], key=lambda x: x["スコア"], reverse=True)
-    w1 = top_1_2[0]
-    w2 = top_3_4[0]
-    first_row = [w1["車番"], w2["車番"]]
-
-    top4 = [d for d in score_df if d["得点順位"] <= 4]
-    top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
-    second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]
-
-    score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
-    third_row = [score1_car]
-
-    lines = [
-        [1, 3],
-        [2, 4],
-        [5, 6],
-        [7]
-    ]
-
-    anchor_candidates = [d for d in score_df if d["得点順位"] in [1, 2]]
-    anchor_lines = []
-    for ac in anchor_candidates:
-        for line in lines:
-            if ac["車番"] in line:
-                anchor_lines.append(line)
-                break
-
-    line_candidates = list(set(itertools.chain.from_iterable(anchor_lines)))
-    line_candidates = [d for d in score_df if d["車番"] in line_candidates and d["車番"] != score1_car]
-    line_candidates_sorted = sorted(line_candidates, key=lambda x: x["スコア"], reverse=True)
-
-    overlap_count = 1 if score1_car in first_row else 0
-    for candidate in line_candidates_sorted:
-        if candidate["車番"] == score1_car:
-            continue
-        if candidate["車番"] in first_row:
-            if overlap_count >= 1:
-                continue
-            else:
-                overlap_count += 1
-                third_row.append(candidate["車番"])
-                break
-        else:
-            third_row.append(candidate["車番"])
-            break
-
-    bets = set()
-    for a in first_row:
-        for b in second_row:
-            for c in third_row:
-                combo = tuple(sorted([a, b, c]))
-                if len(set(combo)) == 3:
-                    bets.add(combo)
-
-    st.markdown("### 🎯 フォーメーション構成")
-    st.markdown(f"◎（1列目）：{first_row}")
-    st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
-    st.markdown(f"3列目（スコア1位＋競争得点1・2位ライン内スコア上位、最大１重複許容）：{third_row}")
-
-    st.markdown(f"👉 三連複 {len(bets)}点：")
-    for b in sorted(bets):
-        st.markdown(f"- {b}")
-
-    st.markdown("### 競争得点順位含む選手情報")
-    st.dataframe(df.sort_values(by='競争得点順位'))
+    # 結果表示
+    st.markdown("### フォーメーション結果")
+    # フォーメーション表示など
 
     if st.button("リセット", key="reset_button"):
         st.session_state.calculated = False
         st.experimental_rerun()
-
