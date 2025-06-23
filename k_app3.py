@@ -580,7 +580,6 @@ import itertools
 # --- 入力例（7車分） ---
 # 競争得点（Streamlit側から）
 kakutoku_scores = rating
-# スコアは未使用（補正なしで運用）
 # ライン構成（Streamlit側から）
 # lines = [[1, 3], [2, 4], [5, 6], [7]] ← Streamlit側と統合済み前提
 
@@ -596,26 +595,28 @@ for rank, d in enumerate(score_df, 1):
     d["得点順位"] = rank
 
 # --- 1列目（W軸）選出 ---
-top_1_2 = [d for d in score_df if d["得点順位"] in [1, 2]]
-top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
+top_1_2 = sorted([d for d in score_df if d["得点順位"] in [1, 2]], key=lambda x: x["スコア"], reverse=True)
+top_3_4 = sorted([d for d in score_df if d["得点順位"] in [3, 4]], key=lambda x: x["スコア"], reverse=True)
 
 if not top_1_2 or not top_3_4:
     raise ValueError("競争得点上位4人が不足しています")
 
-w1 = max(top_1_2, key=lambda x: x["スコア"])
-w2 = max(top_3_4, key=lambda x: x["スコア"])
+w1 = top_1_2[0]  # 競争得点1・2位からスコア上位
+w2 = top_3_4[0]  # 競争得点3・4位からスコア上位
 first_row = [w1["車番"], w2["車番"]]
 anchor_car = w1["車番"]
 
-# --- 2列目：競争得点上位4名の中からスコア上位2〜4位 ---
+# --- 2列目：競争得点上位1〜4名の中からスコア上位2〜4位 ---
 top4 = [d for d in score_df if d["得点順位"] <= 4]
 top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
-second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]  # 2〜4位
+second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]  # スコア上位2〜4位
 
-# --- 3列目：スコア1位＋競争得点1・2位に属するライン内のスコア上位1車 ---
-score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
+# --- 3列目：スコア1位＋競争得点1・2位のライン内スコア上位1車（重複時は次点） ---
+score1 = max(score_df, key=lambda x: x["スコア"])
+score1_car = score1["車番"]
 third_row = [score1_car]
 
+# ライン情報から競争得点1・2位の選手のラインを特定
 anchor_candidates = [d for d in score_df if d["得点順位"] in [1, 2]]
 anchor_lines = []
 for ac in anchor_candidates:
@@ -624,11 +625,12 @@ for ac in anchor_candidates:
             anchor_lines.append(line)
             break
 
+# ライン内からスコア1位の選手を除いてスコア上位を選ぶ（重複回避）
 line_candidates = list(set(itertools.chain.from_iterable(anchor_lines)))
 line_candidates = [d for d in score_df if d["車番"] in line_candidates and d["車番"] != score1_car]
-line_candidates_sorted = sorted(line_candidates, key=lambda x: x["スコア"], reverse=True)
-if line_candidates_sorted:
-    third_row.append(line_candidates_sorted[0]["車番"])
+if line_candidates:
+    best_himo = sorted(line_candidates, key=lambda x: x["スコア"], reverse=True)[0]
+    third_row.append(best_himo["車番"])
 
 # --- フォーメーション作成（三連複） ---
 bets = set()
@@ -639,11 +641,12 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- 結果出力（Streamlit出力対応） ---
+# --- 結果出力（Streamlit対応） ---
 st.markdown("### 🎯 フォーメーション構成")
 st.markdown(f"◎（1列目）：{first_row}")
 st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
 st.markdown(f"3列目（スコア1位＋得点1・2位のライン内スコア上位1車）：{third_row}")
+
 st.markdown(f"👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
-    st.markdown(f"{b}")
+    st.markdown(f"- {b}")
