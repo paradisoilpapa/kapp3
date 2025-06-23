@@ -579,7 +579,9 @@ import pandas as pd
 import itertools
 
 # --- 競争得点をユーザー入力から取得（例） ---
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
+st.subheader("▼ 競争得点入力")
+rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
+
 
 # --- 例として final_score_parts から DataFrame作成 ---
 # final_score_parts は実際のデータ構造に合わせてください
