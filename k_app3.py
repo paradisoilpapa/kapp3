@@ -579,14 +579,17 @@ import itertools
 # --- 入力例（7車分） ---
 # 競争得点（Streamlit側から）
 kakutoku_scores = rating
-# スコアは未使用（補正なしで運用）
+# スコア（補正後得点等）を使用
+kakutoku_scores_final = final_scores  # この変数がStreamlit側にある前提
+
 # ライン構成（Streamlit側から）
 # lines = [[1, 3], [2, 4], [5, 6], [7]] ← Streamlit側と統合済み前提
 
 # --- 準備 ---
 car_indices = list(range(1, 8))
 score_df = [
-    {"車番": i, "得点": kakutoku_scores[i-1]} for i in car_indices
+    {"車番": i, "得点": kakutoku_scores[i-1], "スコア": kakutoku_scores_final[i-1]}
+    for i in car_indices
 ]
 
 # 得点順位をつける
@@ -601,8 +604,8 @@ top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
 if not top_1_2 or not top_3_4:
     raise ValueError("競争得点上位4人が不足しています")
 
-w1 = top_1_2[0]
-w2 = top_3_4[0]
+w1 = sorted(top_1_2, key=lambda x: x["スコア"], reverse=True)[0]
+w2 = sorted(top_3_4, key=lambda x: x["スコア"], reverse=True)[0]
 first_row = [w1["車番"], w2["車番"]]
 anchor_car = w1["車番"]
 
@@ -625,14 +628,14 @@ for a in first_row:
             if len(set(combo)) == 3:
                 bets.add(combo)
 
-# --- 結果出力（Streamlit表示） ---
-st.markdown("### 🎯 フォーメーション構成")
+# --- 結果出力 ---
+st.markdown(f"### 🎯 フォーメーション構成")
 st.markdown(f"◎（W軸）：{first_row}")
 st.markdown(f"2列目（得点上位4人）：{top4_cars}")
 st.markdown(f"3列目（◎のライン）：{third_row}")
-st.markdown(f"👉 三連複 {len(bets)}点：")
+st.markdown(f"\n👉 三連複 {len(bets)}点：")
 for b in sorted(bets):
-    st.write(b)
+    st.markdown(str(b))
 
 # --- 理想フォーメ（◎-穴-堅実構成）のチェック表示 ---
 with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォーメ成立すればＧｏ）", expanded=True):
@@ -649,4 +652,3 @@ with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォ�
             st.write("該当なし（構成が成立しないため）")
     except:
         st.write("該当なし（構成が成立しないため）")
-
