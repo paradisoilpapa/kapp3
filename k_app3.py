@@ -580,30 +580,38 @@ import itertools
 
 st.title("競輪フォーメーション計算")
 
-# --- 競争得点入力（1回だけ） ---
-st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
+# 初期化
+if "calculated" not in st.session_state:
+    st.session_state.calculated = False
 
-# --- サンプルの補正スコアデータ（実際は外部計算や読み込み想定） ---
-final_score_parts = [
-    [1, "逃", 4.8, 0, 0.32, 0, 0, 0, -0.03, 0.25, -0.02, -0.15, 5.37],
-    [2, "逃", 4.7, 0, 0.22, 0, 0, -0.2, 0, 0.3, -0.08, -0.07, 5.02],
-    [3, "追", 4.7, 0, 0.25, 0, 0, 0, 0, 0.2, 0, 0, 5.10],
-    [4, "両", 4.8, 0, 0.28, 0, 0, 0, 0, 0.25, 0, 0, 5.5],
-    [5, "両", 4.8, 0, 0.3, 0, 0, 0, 0, 0.25, 0, 0, 5.6],
-    [6, "追", 4.7, 0, 0.26, 0, 0, 0, 0, 0.2, 0, 0, 5.3],
-    [7, "両", 4.8, 0, 0.31, 0, 0, 0, 0, 0.3, 0, 0, 5.7]
-]
+if not st.session_state.calculated:
+    st.subheader("▼ 競争得点入力")
+    rating = [st.number_input(f"{i+1}番競争得点", value=55.0, step=0.1, key=f"rate_unique_{i}") for i in range(7)]
 
-# 計算ボタン
-if st.button("スコア計算実行"):
+    if st.button("スコア計算実行"):
+        st.session_state.rating = rating
+        st.session_state.calculated = True
+        st.experimental_rerun()
+
+else:
+    rating = st.session_state.rating
+
+    # サンプル補正スコアデータ
+    final_score_parts = [
+        [1, "逃", 4.8, 0, 0.32, 0, 0, 0, -0.03, 0.25, -0.02, -0.15, 5.37],
+        [2, "逃", 4.7, 0, 0.22, 0, 0, -0.2, 0, 0.3, -0.08, -0.07, 5.02],
+        [3, "追", 4.7, 0, 0.25, 0, 0, 0, 0, 0.2, 0, 0, 5.10],
+        [4, "両", 4.8, 0, 0.28, 0, 0, 0, 0, 0.25, 0, 0, 5.5],
+        [5, "両", 4.8, 0, 0.3, 0, 0, 0, 0, 0.25, 0, 0, 5.6],
+        [6, "追", 4.7, 0, 0.26, 0, 0, 0, 0, 0.2, 0, 0, 5.3],
+        [7, "両", 4.8, 0, 0.31, 0, 0, 0, 0, 0.3, 0, 0, 5.7]
+    ]
 
     df = pd.DataFrame(final_score_parts, columns=[
         '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
         '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
         'グループ補正', '合計スコア'
     ])
-    # 競争得点をデータフレームに追加
     df['競争得点'] = rating
     df['競争得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
 
@@ -617,23 +625,19 @@ if st.button("スコア計算実行"):
         for _, row in df.iterrows()
     ]
 
-    # 1列目（W軸）
     top_1_2 = sorted([d for d in score_df if d["得点順位"] in [1, 2]], key=lambda x: x["スコア"], reverse=True)
     top_3_4 = sorted([d for d in score_df if d["得点順位"] in [3, 4]], key=lambda x: x["スコア"], reverse=True)
     w1 = top_1_2[0]
     w2 = top_3_4[0]
     first_row = [w1["車番"], w2["車番"]]
 
-    # 2列目
     top4 = [d for d in score_df if d["得点順位"] <= 4]
     top4_sorted_by_score = sorted(top4, key=lambda x: x["スコア"], reverse=True)
     second_row = [d["車番"] for d in top4_sorted_by_score[1:4]]
 
-    # 3列目
     score1_car = max(score_df, key=lambda x: x["スコア"])["車番"]
     third_row = [score1_car]
 
-    # ライン構成（例）
     lines = [
         [1, 3],
         [2, 4],
@@ -649,12 +653,10 @@ if st.button("スコア計算実行"):
                 anchor_lines.append(line)
                 break
 
-    import itertools
     line_candidates = list(set(itertools.chain.from_iterable(anchor_lines)))
     line_candidates = [d for d in score_df if d["車番"] in line_candidates and d["車番"] != score1_car]
     line_candidates_sorted = sorted(line_candidates, key=lambda x: x["スコア"], reverse=True)
 
-    # 1列目との重複を最大1台許容しつつ3列目を最大2台にする
     overlap_count = 1 if score1_car in first_row else 0
     for candidate in line_candidates_sorted:
         if candidate["車番"] == score1_car:
@@ -670,7 +672,6 @@ if st.button("スコア計算実行"):
             third_row.append(candidate["車番"])
             break
 
-    # 三連複買い目作成
     bets = set()
     for a in first_row:
         for b in second_row:
@@ -679,7 +680,6 @@ if st.button("スコア計算実行"):
                 if len(set(combo)) == 3:
                     bets.add(combo)
 
-    # 表示
     st.markdown("### 🎯 フォーメーション構成")
     st.markdown(f"◎（1列目）：{first_row}")
     st.markdown(f"2列目（得点1〜4位スコア上位2〜4位）：{second_row}")
@@ -691,3 +691,7 @@ if st.button("スコア計算実行"):
 
     st.markdown("### 競争得点順位含む選手情報")
     st.dataframe(df.sort_values(by='競争得点順位'))
+
+    if st.button("リセット"):
+        st.session_state.calculated = False
+        st.experimental_rerun()
