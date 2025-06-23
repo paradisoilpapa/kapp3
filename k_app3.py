@@ -574,132 +574,77 @@ except NameError:
     st.stop()
     
 
-import pandas as pd
-import streamlit as st
-from itertools import combinations
+import itertools
 
-# --- B回数の補完 ---
-df.rename(columns={"バック": "B回数"}, inplace=True)
-b_list = [st.session_state.get(f"b_point_{i+1}", 0) for i in range(len(df))]
+# --- 入力例（7車分） ---
+# 競争得点（Streamlit側から）
+kakutoku_scores = rating
+# スコアは未使用（補正なしで運用）
+# ライン構成（Streamlit側から）
+# lines = [[1, 3], [2, 4], [5, 6], [7]] ← Streamlit側と統合済み前提
 
-if len(b_list) != len(df):
-    st.error("⚠ B回数の入力数と選手数が一致していません")
-    st.stop()
-
-df["B回数"] = b_list
-
-# --- 得点データ構築 ---
-score_df = pd.DataFrame({
-    "車番": list(range(1, 8)),
-    "得点": rating
-})
-
-# --- 得点上位2〜4位の中からスコア中位を◎に設定 ---
-subset = score_df.sort_values(by="得点", ascending=False).iloc[1:4]
-subset_scores = [row for row in final_score_parts if row[0] in subset["車番"].tolist()]
-subset_scores_sorted = sorted(subset_scores, key=lambda x: x[-1], reverse=True)
-anchor_car = subset_scores_sorted[1][0]  # 中央値 → ◎
-
-# --- ライン構築と初期化 ---
-anchor_line_idx = next(i for i, line in enumerate(lines) if anchor_car in line)
-line_roles = {i: "Z" for i in range(len(lines))}
-line_roles[anchor_line_idx] = "A"
-
-# --- 得点上位1〜4位から◎以外の最上位選手をB候補に設定 ---
-top4_df = score_df.sort_values(by="得点", ascending=False).iloc[:4]
-b_candidates = top4_df[top4_df["車番"] != anchor_car]
-
-if not b_candidates.empty:
-    top_b_car = b_candidates.iloc[0]["車番"]
-    for i, line in enumerate(lines):
-        if top_b_car in line:
-            if i != anchor_line_idx:
-                line_roles[i] = "B"
-            break
-
-# --- Cライン：A/B以外でtop4の誰かが所属するライン ---
-top4_cars = set(top4_df["車番"])
-for i, line in enumerate(lines):
-    if line_roles[i] == "Z":
-        if any(car in top4_cars for car in line):
-            line_roles[i] = "C"
-
-# --- 各ラインから車番抽出 ---
-a_line = lines[anchor_line_idx]
-b_cars = [car for idx, role in line_roles.items() if role == "B" for car in lines[idx]]
-c_cars = [car for idx, role in line_roles.items() if role == "C" for car in lines[idx]]
-
-# --- Aライン内で◎以外のスコア順 ---
-anchor_score_sorted = sorted(
-    [row for row in final_score_parts if row[0] in a_line],
-    key=lambda x: x[-1],
-    reverse=True
-)
-anchor_others = [row[0] for row in anchor_score_sorted if row[0] != anchor_car]
-
-# --- 補助関数 ---
-def get_b2_and_score_max(source_cars):
-    sub_df = df[df["車番"].isin(source_cars)].copy()
-    sub_scores = {row[0]: row[-1] for row in final_score_parts if row[0] in source_cars}
-    sub_df["スコア"] = sub_df["車番"].map(sub_scores)
-    sub_df = sub_df[sub_df["B回数"] <= 2]
-    if sub_df.empty:
-        return []
-    score_max = sub_df["スコア"].max()
-    final = sub_df[sub_df["スコア"] == score_max]
-    return final["車番"].tolist()
-
-def get_score_max(source_cars):
-    sub_scores = [(row[0], row[-1]) for row in final_score_parts if row[0] in source_cars]
-    if not sub_scores:
-        return []
-    max_score = max([x[1] for x in sub_scores])
-    return [x[0] for x in sub_scores if x[1] == max_score]
-
-# --- 理想構成の抽出（重複排除つき） ---
-car_2 = next((c for c in get_b2_and_score_max(b_cars) if c != anchor_car), None)
-car_3 = next((c for c in get_b2_and_score_max([car for car in a_line + c_cars if car != anchor_car and car != car_2])), None)
-car_4 = next((c for c in get_score_max(b_cars) if c != anchor_car and c != car_2 and c != car_3), None)
-car_5 = next((c for c in get_score_max([car for car in a_line + c_cars if car not in [anchor_car, car_2, car_3, car_4]])), None)
-
-# --- パターン1：◎-◎ライン-漁夫 ---
-pattern_1 = [
-    tuple(sorted([anchor_car, x, y]))
-    for x in anchor_others
-    for y in c_cars
-    if len(set([anchor_car, x, y])) == 3
+# --- 準備 ---
+car_indices = list(range(1, 8))
+score_df = [
+    {"車番": i, "得点": kakutoku_scores[i-1]} for i in car_indices
 ]
 
-# --- パターン２：対抗-対抗-◎ ---
-b_only = [car for car in b_cars if car != anchor_car]
-pattern_2 = [
-    tuple(sorted([x, y, anchor_car]))
-    for i, x in enumerate(b_only)
-    for y in b_only[i+1:]
-]
+# 得点順位をつける
+score_df.sort(key=lambda x: x["得点"], reverse=True)
+for rank, d in enumerate(score_df, 1):
+    d["得点順位"] = rank
 
-# --- 重複削除・ソート ---
-pattern_1 = sorted(set(pattern_1))
-pattern_2 = sorted(set(pattern_2))
+# --- 1列目（W軸）選出 ---
+top_1_2 = [d for d in score_df if d["得点順位"] in [1, 2]]
+top_3_4 = [d for d in score_df if d["得点順位"] in [3, 4]]
 
-# --- 表示部 ---
-st.markdown("### 🌟 フォーメーション構成")
-st.markdown(f"◎：{anchor_car} ／ 本命ライン（A）：{a_line}")
-st.markdown(f"対抗ライン（B）：{b_cars if b_cars else '該当なし'}")
-st.markdown(f"漁夫ライン（C）：{c_cars if c_cars else '該当なし'}")
+if not top_1_2 or not top_3_4:
+    raise ValueError("競争得点上位4人が不足しています")
 
-with st.expander("▶ パターン1：◎-◎ライン-漁夫", expanded=True):
-    for p in pattern_1:
-        st.write(f"三連複 {p}")
+w1 = top_1_2[0]
+w2 = top_3_4[0]
+first_row = [w1["車番"], w2["車番"]]
+anchor_car = w1["車番"]
 
-with st.expander("▶ パターン・２：対抗-対抗-◎", expanded=True):
-    for p in pattern_2:
-        st.write(f"三連複 {p}")
+# --- 2列目：競争得点上位4名 ---
+top4_cars = [d["車番"] for d in score_df if d["得点順位"] <= 4]
 
-with st.expander("▶ パターン3：◎-穴-堅実構成（理想フォーメ）", expanded=True):
-    if all([car_2, car_3, car_4, car_5]):
-        st.markdown(f"◎：{anchor_car}")
-        st.markdown(f"穴（2列目）：{car_2}, {car_3}")
-        st.markdown(f"安定（3列目）：{car_4}, {car_5}")
-    else:
+# --- 3列目：◎と同じラインの他選手 ---
+third_row = []
+for line in lines:
+    if anchor_car in line:
+        third_row = [i for i in line if i != anchor_car]
+        break
+
+# --- フォーメーション作成（三連複） ---
+bets = set()
+for a in first_row:
+    for b in top4_cars:
+        for c in third_row:
+            combo = tuple(sorted([a, b, c]))
+            if len(set(combo)) == 3:
+                bets.add(combo)
+
+# --- 結果出力 ---
+print("◎（W軸）：", first_row)
+print("2列目（得点上位4人）：", top4_cars)
+print(f"3列目（◎のライン）：", third_row)
+print(f"\n👉 三連複 {len(bets)}点：")
+for b in sorted(bets):
+    print(b)
+
+# --- 理想フォーメ（◎-穴-堅実構成）のチェック表示 ---
+with st.expander("▶ ケンチェック：◎-穴-堅実構成（理想フォーメ成立すればＧｏ）", expanded=True):
+    try:
+        car_2 = top_3_4[0]["車番"]
+        car_3 = top_3_4[1]["車番"] if len(top_3_4) > 1 else None
+        car_4 = top4_cars[2] if len(top4_cars) > 2 else None
+        car_5 = top4_cars[3] if len(top4_cars) > 3 else None
+        if all([car_2, car_3, car_4, car_5]):
+            st.markdown(f"◎：{anchor_car}")
+            st.markdown(f"穴（2列目）：{car_2}, {car_3}")
+            st.markdown(f"安定（3列目）：{car_4}, {car_5}")
+        else:
+            st.write("該当なし（構成が成立しないため）")
+    except:
         st.write("該当なし（構成が成立しないため）")
