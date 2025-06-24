@@ -602,8 +602,8 @@ score_df = [
     for _, row in df.iterrows()
 ]
 
-# ◎：競争得点3・4位からスコア上位1台
-anchor_candidates = [d for d in score_df if d["得点順位"] in [3, 4]]
+# ◎：競争得点2・3・4位からスコア上位1台
+anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
 anchor = max(anchor_candidates, key=lambda x: x["スコア"])
 anchor_no = anchor["車番"]
 
