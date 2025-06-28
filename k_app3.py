@@ -670,38 +670,32 @@ for x in temp:
 # --- 3車しか選ばれていない場合の補完処理 ---
 if len(himo_list) == 3:
     third_base_extra = None
-    himo12_extra = None
+    himo_candidate_extra = None
 
-    # 🚧 デバッグ用出力
-    st.markdown(f"🔍 himo_list: {himo_list}")
-    st.markdown(f"🔍 third_base: {third_base}")
-    st.markdown(f"🔍 himo_1, himo_2: {himo_1}, {himo_2}")
+    # --- 1. third_base「にすら選ばれなかった second 候補」から選ぶ
+    # → second_candidates から second_nos と third_base を除いた残り
+    second_unused = [x for x in second_candidates if x not in second_nos and x not in third_base and x not in himo_list]
+    second_unused_scores = [d for d in score_df if d["車番"] in second_unused]
+    if second_unused_scores:
+        third_base_extra = max(second_unused_scores, key=lambda x: x["スコア"])
 
-    # 1. third_base のうち himo_list に含まれていない車
-    third_base_unused = [x for x in third_base if x not in himo_list]
-    third_base_scores = [d for d in score_df if d["車番"] in third_base_unused]
-    if third_base_scores:
-        third_base_extra = max(third_base_scores, key=lambda x: x["スコア"])
+    # --- 2. 得点5〜7位 から himo①② にもれたものを選ぶ
+    low_rank_all = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
+    himo_selected = [himo_1, himo_2]
+    himo_unused = [d for d in low_rank_all if d["車番"] not in himo_selected and d["車番"] not in himo_list]
+    if himo_unused:
+        himo_candidate_extra = max(himo_unused, key=lambda x: x["スコア"])
 
-    # 2. himo_1, himo_2 のうち himo_list に含まれていない車
-    himo12_unused = [x for x in [himo_1, himo_2] if x not in himo_list]
-    himo12_scores = [d for d in score_df if d["車番"] in himo12_unused]
-    if himo12_scores:
-        himo12_extra = max(himo12_scores, key=lambda x: x["スコア"])
-
-    # 3. 比較して補完実行
-    if third_base_extra and himo12_extra:
-        better = third_base_extra if third_base_extra["スコア"] >= himo12_extra["スコア"] else himo12_extra
+    # --- スコアで比較して良い方を補完
+    if third_base_extra and himo_candidate_extra:
+        better = third_base_extra if third_base_extra["スコア"] >= himo_candidate_extra["スコア"] else himo_candidate_extra
         himo_list.append(better["車番"])
-        st.info(f"✅ 補完：{better['車番']} を追加（スコア比較）")
     elif third_base_extra:
         himo_list.append(third_base_extra["車番"])
-        st.info(f"✅ 補完：{third_base_extra['車番']} を追加（third_base）")
-    elif himo12_extra:
-        himo_list.append(himo12_extra["車番"])
-        st.info(f"✅ 補完：{himo12_extra['車番']} を追加（himo①②）")
+    elif himo_candidate_extra:
+        himo_list.append(himo_candidate_extra["車番"])
     else:
-        st.warning("⚠️ 補完候補がいません（third_base / himo①②）")
+        st.warning("⚠️ 補完対象が存在しません（third_base外れ or ヒモ①②外れ）")
 
 
 # 三連複構成（◎-ヒモ-ヒモ）
