@@ -602,37 +602,35 @@ score_df = [
     for _, row in df.iterrows()
 ]
 
-# ◎：競争得点2・3・4位からスコア中位1車
+# ◎（軸）：競争得点2〜4位の中からスコア中位（2番目）
 anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
 anchor = sorted(anchor_candidates, key=lambda x: x["スコア"])[1]
 anchor_no = anchor["車番"]
 
-# 対抗ライン1位、漁夫ライン1位、ヒモ③（得点1位）を候補に
-# ※ライン情報は別途。ここでは仮に車番で指定（例: 5, 6, 1）
-taikou = 5  # 対抗ライン
-gyofu = 6   # 漁夫の利ライン
-himo3_raw = 1  # 得点1位 or ◎のライン内得点1位
+# 対抗ライン1位、漁夫ライン1位、ヒモ③候補（得点1位 or ◎のライン得点1位）
+# → 別途ライン情報が必要。ここでは仮で明示的に設定
+# ※将来的にライン情報から自動抽出すること
+candidate_ids = list(set([5, 6, 1]))  # 仮の車番：対抗, 漁夫, 得点1位 or ◎のライン代表
 
 # スコア上位2車を2列目に
-candidate_ids = list(set([taikou, gyofu, himo3_raw]))
 candidate_scores = [d for d in score_df if d["車番"] in candidate_ids]
 second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
 second_nos = [d["車番"] for d in second_row]
 
-# 残りを3列目候補に
+# 残り1車をthird_baseに
 third_base = list(set(candidate_ids) - set(second_nos))
 
-# ヒモ①②：得点5〜7位からスコア上位2車
+# ヒモ①②：競争得点5〜7位からスコア上位2車（7車立て対応）
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
 low_sorted = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[:2]
 himo_1 = low_sorted[0]["車番"]
 himo_2 = low_sorted[1]["車番"]
 
-# ヒモ④：得点2〜4位から◎以外でスコア上位1車
+# ヒモ④：競争得点2〜4位から◎を除くスコア上位1車
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# 3列目まとめ（重複除去）
+# 3列目構成（重複除去）
 himo_list = list(set([himo_1, himo_2, himo_4] + third_base))
 
 # 三連複構成（◎-ヒモ-ヒモ）
