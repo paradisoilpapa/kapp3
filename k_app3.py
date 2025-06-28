@@ -661,7 +661,7 @@ up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["�
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
 # --- 3列目構成（順序保持＋重複除去） ---
-temp = [himo_1, himo_2, himo_4] + third_base
+temp = [int(himo_1), int(himo_2), int(himo_4)] + [int(x) for x in third_base]
 himo_list = []
 for x in temp:
     if x not in himo_list:
@@ -672,28 +672,36 @@ if len(himo_list) == 3:
     third_base_extra = None
     himo12_extra = None
 
-    # 1. third_baseから未使用の1車（スコア最大）
+    # 🚧 デバッグ用出力
+    st.markdown(f"🔍 himo_list: {himo_list}")
+    st.markdown(f"🔍 third_base: {third_base}")
+    st.markdown(f"🔍 himo_1, himo_2: {himo_1}, {himo_2}")
+
+    # 1. third_base のうち himo_list に含まれていない車
     third_base_unused = [x for x in third_base if x not in himo_list]
-    if third_base_unused:
-        third_base_scores = [d for d in score_df if d["車番"] in third_base_unused]
+    third_base_scores = [d for d in score_df if d["車番"] in third_base_unused]
+    if third_base_scores:
         third_base_extra = max(third_base_scores, key=lambda x: x["スコア"])
 
-    # 2. himo①②から未使用の1車（スコア最大）
+    # 2. himo_1, himo_2 のうち himo_list に含まれていない車
     himo12_unused = [x for x in [himo_1, himo_2] if x not in himo_list]
-    if himo12_unused:
-        himo12_scores = [d for d in score_df if d["車番"] in himo12_unused]
+    himo12_scores = [d for d in score_df if d["車番"] in himo12_unused]
+    if himo12_scores:
         himo12_extra = max(himo12_scores, key=lambda x: x["スコア"])
 
-    # 3. それぞれの候補が存在する場合、スコア比較
+    # 3. 比較して補完実行
     if third_base_extra and himo12_extra:
         better = third_base_extra if third_base_extra["スコア"] >= himo12_extra["スコア"] else himo12_extra
         himo_list.append(better["車番"])
+        st.info(f"✅ 補完：{better['車番']} を追加（スコア比較）")
     elif third_base_extra:
         himo_list.append(third_base_extra["車番"])
+        st.info(f"✅ 補完：{third_base_extra['車番']} を追加（third_base）")
     elif himo12_extra:
         himo_list.append(himo12_extra["車番"])
-
-
+        st.info(f"✅ 補完：{himo12_extra['車番']} を追加（himo①②）")
+    else:
+        st.warning("⚠️ 補完候補がいません（third_base / himo①②）")
 
 
 # 三連複構成（◎-ヒモ-ヒモ）
