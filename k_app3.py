@@ -660,17 +660,20 @@ himo_2 = low_sorted[1]["車番"]
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# 3列目構成（重複除去）
-himo_list = list(set([himo_1, himo_2, himo_4] + third_base))
+# 3列目構成（重複除去）※順番維持＋重複除去
+temp = [himo_1, himo_2, himo_4] + third_base
+seen = set()
+himo_list = [x for x in temp if x not in seen and not seen.add(x)]
 
-# 🔧 3列目が3車しかいないとき → 補完処理
+# 🔧 3列目が3車しかいないとき → 補完処理（third_base + himo①② の中から）
 if len(himo_list) < 4:
-    # 候補：third_base + himo_1, himo_2 から未登録かつスコア上位を選ぶ
-    backup_sources = list(set([himo_1, himo_2] + third_base) - set(himo_list))
-    backup_scores = [d for d in score_df if d["車番"] in backup_sources]
-    if backup_scores:
-        extra = max(backup_scores, key=lambda x: x["スコア"])["車番"]
+    candidates_for補完 = [x for x in ([himo_1, himo_2] + third_base) if x not in himo_list]
+    candidate_scores = [d for d in score_df if d["車番"] in candidates_for補完]
+    if candidate_scores:
+        extra = max(candidate_scores, key=lambda x: x["スコア"])["車番"]
         himo_list.append(extra)
+        # st.info(f"🔧 3列目補完：{extra}を追加")
+
 
 
 # 三連複構成（◎-ヒモ-ヒモ）
