@@ -660,19 +660,26 @@ himo_2 = low_sorted[1]["車番"]
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# 3列目構成（重複除去）※順番維持＋重複除去
+# 3列目構成（重複除去）
 temp = [himo_1, himo_2, himo_4] + third_base
 seen = set()
 himo_list = [x for x in temp if x not in seen and not seen.add(x)]
 
-# 🔧 3列目が3車しかいないとき → 補完処理（third_base + himo①② の中から）
+# 🔧 3列目が3車しかいないとき → third_base vs himo①② からスコア比較で補完
 if len(himo_list) < 4:
-    candidates_for補完 = [x for x in ([himo_1, himo_2] + third_base) if x not in himo_list]
-    candidate_scores = [d for d in score_df if d["車番"] in candidates_for補完]
-    if candidate_scores:
-        extra = max(candidate_scores, key=lambda x: x["スコア"])["車番"]
+    # 候補1：third_base のうち未使用のもの
+    third_base_unused = [x for x in third_base if x not in himo_list]
+    third_base_scores = [d for d in score_df if d["車番"] in third_base_unused]
+
+    # 候補2：himo①② のうち未使用のもの
+    himo12_unused = [x for x in [himo_1, himo_2] if x not in himo_list]
+    himo12_scores = [d for d in score_df if d["車番"] in himo12_unused]
+
+    # 両者をまとめて比較
+    combined_scores = third_base_scores + himo12_scores
+    if combined_scores:
+        extra = max(combined_scores, key=lambda x: x["スコア"])["車番"]
         himo_list.append(extra)
-        # st.info(f"🔧 3列目補完：{extra}を追加")
 
 
 
