@@ -663,6 +663,16 @@ himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 # 3列目構成（重複除去）
 himo_list = list(set([himo_1, himo_2, himo_4] + third_base))
 
+# 🔧 3列目が3車しかいないとき → 補完処理
+if len(himo_list) < 4:
+    # 候補：third_base + himo_1, himo_2 から未登録かつスコア上位を選ぶ
+    backup_sources = list(set([himo_1, himo_2] + third_base) - set(himo_list))
+    backup_scores = [d for d in score_df if d["車番"] in backup_sources]
+    if backup_scores:
+        extra = max(backup_scores, key=lambda x: x["スコア"])["車番"]
+        himo_list.append(extra)
+
+
 # 三連複構成（◎-ヒモ-ヒモ）
 bets = set()
 for a, b in itertools.combinations(himo_list, 2):
