@@ -638,14 +638,16 @@ else:
     anchor_line_scores = [d for d in score_df if d["車番"] in anchor_line_members]
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
-# --- 上記3車を候補にして、スコア上位2車を選出 ---
-second_candidates = list(set(filter(None, [taikou_leader, gyofu_leader, himo3])))
+# --- ◎を除外して、候補からスコア上位2車を選出 ---
+raw_candidates = [taikou_leader, gyofu_leader, himo3]
+second_candidates = [x for x in raw_candidates if x is not None and x != anchor_no]
 
 candidate_scores = [d for d in score_df if d["車番"] in second_candidates]
 second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
 second_nos = [d["車番"] for d in second_row]
 
 third_base = list(set(second_candidates) - set(second_nos))
+
 
 
 # ヒモ①②：競争得点5〜7位からスコア上位2車（7車立て対応）
