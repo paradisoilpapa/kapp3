@@ -28,7 +28,7 @@ position_multipliers = {
 }
 
 # --- 基本スコア（脚質ごとの基準値） ---
-base_score = {'逃': 4.72, '両': 5.05, '追': 5.23}
+base_score = {'逃': 4.6, '両': 4.9, '追': 5.5}
 
 # --- 状態保持 ---
 if "selected_wind" not in st.session_state:
@@ -574,7 +574,7 @@ except NameError:
     st.stop()
     
 
-import pandas as pd
+import pandas as pd 
 import itertools
 import streamlit as st
 
@@ -602,26 +602,38 @@ score_df = [
     for _, row in df.iterrows()
 ]
 
-# ◎：競争得点2・3・4位からスコア上位1台
+# ◎：競争得点2・3・4位からスコア中位1車
 anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
-anchor = max(anchor_candidates, key=lambda x: x["スコア"])
+anchor = sorted(anchor_candidates, key=lambda x: x["スコア"])[1]
 anchor_no = anchor["車番"]
 
-# ヒモ①②：競争得点5〜7位からスコア上位2車
-low_rank_candidates = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
-low_rank_sorted = sorted(low_rank_candidates, key=lambda x: x["スコア"], reverse=True)
-himo_1 = low_rank_sorted[0]["車番"]
-himo_2 = low_rank_sorted[1]["車番"]
+# 対抗ライン1位、漁夫ライン1位、ヒモ③（得点1位）を候補に
+# ※ライン情報は別途。ここでは仮に車番で指定（例: 5, 6, 1）
+taikou = 5  # 対抗ライン
+gyofu = 6   # 漁夫の利ライン
+himo3_raw = 1  # 得点1位 or ◎のライン内得点1位
 
-# ヒモ③：競争得点1位の選手
-score_1_car = [d for d in score_df if d["得点順位"] == 1][0]["車番"]
+# スコア上位2車を2列目に
+candidate_ids = list(set([taikou, gyofu, himo3_raw]))
+candidate_scores = [d for d in score_df if d["車番"] in candidate_ids]
+second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
+second_nos = [d["車番"] for d in second_row]
 
-# ヒモ④：競争得点2〜4位から◎以外でスコア上位1車
+# 残りを3列目候補に
+third_base = list(set(candidate_ids) - set(second_nos))
+
+# ヒモ①②：得点5〜7位からスコア上位2車
+low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
+low_sorted = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[:2]
+himo_1 = low_sorted[0]["車番"]
+himo_2 = low_sorted[1]["車番"]
+
+# ヒモ④：得点2〜4位から◎以外でスコア上位1車
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# ヒモ全体
-himo_list = [himo_1, himo_2, score_1_car, himo_4]
+# 3列目まとめ（重複除去）
+himo_list = list(set([himo_1, himo_2, himo_4] + third_base))
 
 # 三連複構成（◎-ヒモ-ヒモ）
 bets = set()
@@ -630,10 +642,11 @@ for a, b in itertools.combinations(himo_list, 2):
     bets.add(combo)
 
 # --- 表示 ---
-st.markdown("### 🎯 三連複6点構成")
+st.markdown("### 🌟 三連複構成（ハイブリッド）")
 st.markdown(f"◎：{anchor_no}")
-st.markdown(f"ヒモ候補：{sorted(himo_list)}")
-st.markdown(f"👉 三連複 {len(bets)}点：")
+st.markdown(f"2列目（スコア上位）：{second_nos}")
+st.markdown(f"3列目候補：{sorted(himo_list)}")
+st.markdown(f"🔹 三連複 {len(bets)}点：")
 for b in sorted(bets):
     st.markdown(f"- {b}")
 
