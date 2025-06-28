@@ -574,7 +574,7 @@ except NameError:
     st.stop()
     
 
-import pandas as pd 
+import pandas as pd  
 import itertools
 import streamlit as st
 
@@ -607,18 +607,37 @@ anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
 anchor = sorted(anchor_candidates, key=lambda x: x["スコア"])[1]
 anchor_no = anchor["車番"]
 
-# 対抗ライン1位、漁夫ライン1位、ヒモ③候補（得点1位 or ◎のライン得点1位）
-# → 別途ライン情報が必要。ここでは仮で明示的に設定
-# ※将来的にライン情報から自動抽出すること
-candidate_ids = list(set([5, 6, 1]))  # 仮の車番：対抗, 漁夫, 得点1位 or ◎のライン代表
+# --- 前提：lines（ライン構成）と anchor_no（◎の車番）はすでに定義済み ---
 
-# スコア上位2車を2列目に
-candidate_scores = [d for d in score_df if d["車番"] in candidate_ids]
+# Bライン先頭（対抗）
+taikou_leader = lines[1][0] if len(lines) > 1 and lines[1] else None
+
+# Cライン先頭（漁夫の利）
+gyofu_leader = lines[2][0] if len(lines) > 2 and lines[2] else None
+
+# ◎のラインを特定（anchor_noを含むライン）
+anchor_line = [line for line in lines if anchor_no in line]
+anchor_line_members = anchor_line[0] if anchor_line else []
+
+# 得点1位を探す（score_dfは前処理済み）
+tenscore_top = min(score_df, key=lambda x: x["得点順位"])
+
+# ヒモ③候補（◎が単騎なら得点1位／ライン内なら◎ライン内の得点1位）
+if len(anchor_line_members) <= 1:
+    himo3 = tenscore_top["車番"]
+else:
+    anchor_line_scores = [d for d in score_df if d["車番"] in anchor_line_members]
+    himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
+
+# --- 上記3車を候補にして、スコア上位2車を選出 ---
+second_candidates = list(set(filter(None, [taikou_leader, gyofu_leader, himo3])))
+
+candidate_scores = [d for d in score_df if d["車番"] in second_candidates]
 second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
 second_nos = [d["車番"] for d in second_row]
 
-# 残り1車をthird_baseに
-third_base = list(set(candidate_ids) - set(second_nos))
+third_base = list(set(second_candidates) - set(second_nos))
+
 
 # ヒモ①②：競争得点5〜7位からスコア上位2車（7車立て対応）
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
