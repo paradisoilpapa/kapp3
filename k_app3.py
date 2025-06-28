@@ -609,11 +609,20 @@ anchor_no = anchor["車番"]
 
 # --- 前提：lines（ライン構成）と anchor_no（◎の車番）はすでに定義済み ---
 
-# Bライン先頭（対抗）
-taikou_leader = lines[1][0] if len(lines) > 1 and lines[1] else None
+# 対抗ライン（Bライン）からスコア最上位の車を取得
+taikou_leader = None
+if len(lines) > 1 and lines[1]:
+    b_line_scores = [d for d in score_df if d["車番"] in lines[1]]
+    if b_line_scores:
+        taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"]
 
-# Cライン先頭（漁夫の利）
-gyofu_leader = lines[2][0] if len(lines) > 2 and lines[2] else None
+# 漁夫の利ライン（Cライン）からスコア最上位の車を取得
+gyofu_leader = None
+if len(lines) > 2 and lines[2]:
+    c_line_scores = [d for d in score_df if d["車番"] in lines[2]]
+    if c_line_scores:
+        gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"]
+
 
 # ◎のラインを特定（anchor_noを含むライン）
 anchor_line = [line for line in lines if anchor_no in line]
