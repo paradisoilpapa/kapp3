@@ -574,3 +574,40 @@ except NameError:
     st.stop()
     
 
+# --- 全角変換関数 ---
+def to_zenkaku(s):
+    return ''.join(chr(ord(c) + 0xFEE0) if c.isdigit() else c for c in s)
+
+# --- ライン構成（全角数字に変換） ---
+line_parts = ["".join(to_zenkaku(str(c)) for c in line_def[k]) for k in sorted(line_def.keys())]
+line_str = "　｜　".join(f"{part}" for part in line_parts)
+
+# --- スコア順位（3-3-1などに分けて全角化） ---
+ranked = df.sort_values(by='合計スコア', ascending=False)['車番'].astype(str).tolist()
+rank_groups = ["".join(to_zenkaku(c) for c in ranked[i:i+3]) for i in range(0, len(ranked), 3)]
+score_str = "　｜　".join(group for group in rank_groups)
+
+# --- 印（◎→×）をスコア上位に付け、その他は「－」で埋める ---
+marks = ["◎", "〇", "▲", "△", "×"]
+mark_line = ["－"] * 7  # 全角の「－」で初期化
+for i, car in enumerate(ranked[:len(marks)]):
+    idx = int(car) - 1
+    mark_line[idx] = marks[i]
+
+# --- 印をライン順に並べて構築（line_def順に） ---
+mark_parts = []
+for k in sorted(line_def.keys()):
+    part = ""
+    for c in line_def[k]:
+        mark = mark_line[c - 1]
+        part += mark
+    mark_parts.append(part)
+mark_str = "　｜　".join(mark_parts)
+
+# --- 出力（ズレないようコードブロック） ---
+st.markdown("### ✅ 整列出力（ライン・スコア・印）")
+st.markdown("```\n" +
+            f"ライン：{line_str}\n" +
+            f"スコア：{score_str}\n" +
+            f"印　　：{mark_str}\n" +
+            "```")
