@@ -574,40 +574,53 @@ except NameError:
     st.stop()
     
 
+# --- 表示整形に特化したコードブロック（スコア計算・line_def・df・ratingが定義済み前提） ---
+
+import pandas as pd
+
 # --- 全角変換関数 ---
 def to_zenkaku(s):
     return ''.join(chr(ord(c) + 0xFEE0) if c.isdigit() else c for c in s)
 
-# --- ライン構成（全角数字に変換） ---
+# --- ライン構成の文字列（全角＋区切り） ---
 line_parts = ["".join(to_zenkaku(str(c)) for c in line_def[k]) for k in sorted(line_def.keys())]
-line_str = "　｜　".join(f"{part}" for part in line_parts)
+line_str = "　｜　".join(part for part in line_parts)
 
-# --- スコア順位（3-3-1などに分けて全角化） ---
+# --- スコア順位（合計スコア順） ---
 ranked = df.sort_values(by='合計スコア', ascending=False)['車番'].astype(str).tolist()
 rank_groups = ["".join(to_zenkaku(c) for c in ranked[i:i+3]) for i in range(0, len(ranked), 3)]
-score_str = "　｜　".join(group for group in rank_groups)
+score_str = "　｜　".join(rank_groups)
 
-# --- 印（◎→×）をスコア上位に付け、その他は「－」で埋める ---
+# --- 印（◎~×）を車番に対応して格納（他は－） ---
 marks = ["◎", "〇", "▲", "△", "×"]
-mark_line = ["－"] * 7  # 全角の「－」で初期化
+mark_line = ["－"] * 7  # 全角-
 for i, car in enumerate(ranked[:len(marks)]):
     idx = int(car) - 1
     mark_line[idx] = marks[i]
 
-# --- 印をライン順に並べて構築（line_def順に） ---
+# --- 印をライン構成順に整列 ---
 mark_parts = []
 for k in sorted(line_def.keys()):
-    part = ""
-    for c in line_def[k]:
-        mark = mark_line[c - 1]
-        part += mark
+    part = "".join(mark_line[c - 1] for c in line_def[k])
     mark_parts.append(part)
 mark_str = "　｜　".join(mark_parts)
 
-# --- 出力（ズレないようコードブロック） ---
-st.markdown("### ✅ 整列出力（ライン・スコア・印）")
-st.markdown("```\n" +
-            f"ライン：{line_str}\n" +
-            f"スコア：{score_str}\n" +
-            f"印　　：{mark_str}\n" +
-            "```")
+# --- 得点順位（高得点順に車番並べる） ---
+tenscore_df = pd.DataFrame({
+    '車番': [i+1 for i in range(7)],
+    '得点': rating
+})
+tenscore_df['順位'] = tenscore_df['得点'].rank(ascending=False, method='min').astype(int)
+tenscore_order = tenscore_df.sort_values(by='順位')['車番'].astype(str).tolist()
+tenscore_groups = ["".join(to_zenkaku(c) for c in tenscore_order[i:i+3]) for i in range(0, len(tenscore_order), 3)]
+tenscore_str = "　｜　".join(tenscore_groups)
+
+# --- 出力（Streamlitコードブロック形式） ---
+st.markdown("### ✅ 整列表示（ライン・スコア・印・得点）")
+st.markdown("""
+```
+ライン：{} 
+スコア：{} 
+印　：{} 
+得点：{} 
+```""".format(line_str, score_str, mark_str, tenscore_str))
