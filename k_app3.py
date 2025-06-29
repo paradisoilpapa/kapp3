@@ -606,3 +606,17 @@ for k in sorted(line_def.keys()):
 df_summary = pd.DataFrame(table_rows)
 st.markdown("### ✅ 表形式での整列出力（ライン・スコア・印・得点）")
 st.dataframe(df_summary)
+
+# --- 得点順位2〜4位の車番を取得 ---
+top234_cars = [car for car, rank in tenscore_rank.items() if rank in [2, 3, 4]]
+
+# --- それらの中からスコアが最も高い車番を選出 ---
+df_top234 = df[df['車番'].isin(top234_cars)]
+if not df_top234.empty:
+    anchor_row = df_top234.sort_values(by='合計スコア', ascending=False).iloc[0]
+    anchor_no = int(anchor_row['車番'])
+    anchor_score = anchor_row['合計スコア']
+    st.markdown(f"**◎候補（競争得点2〜4位の中でスコア最高）：{anchor_no}番（スコア {anchor_score:.2f}）**")
+else:
+    st.markdown("◎候補：該当なし（競争得点2〜4位が存在しない）")
+
