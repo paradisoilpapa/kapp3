@@ -574,53 +574,35 @@ except NameError:
     st.stop()
     
 
-# --- 表示整形に特化したコードブロック（スコア計算・line_def・df・ratingが定義済み前提） ---
+# --- 得点順位を事前計算 ---
+tenscore_df = pd.DataFrame({'車番': [i+1 for i in range(7)], '得点': rating})
+tenscore_df['得点順位'] = tenscore_df['得点'].rank(ascending=False, method='min').astype(int)
+tenscore_rank = dict(zip(tenscore_df['車番'], tenscore_df['得点順位']))
 
-import pandas as pd
+# --- スコア順位（合計スコア高→低） ---
+ranked_car = df.sort_values(by='合計スコア', ascending=False)['車番'].tolist()
+score_rank = {int(c): i for i, c in enumerate(ranked_car)}
 
-# --- 全角変換関数 ---
-def to_zenkaku(s):
-    return ''.join(chr(ord(c) + 0xFEE0) if c.isdigit() else c for c in s)
-
-# --- ライン構成の文字列（全角＋区切り） ---
-line_parts = ["".join(to_zenkaku(str(c)) for c in line_def[k]) for k in sorted(line_def.keys())]
-line_str = "　｜　".join(part for part in line_parts)
-
-# --- スコア順位（合計スコア順） ---
-ranked = df.sort_values(by='合計スコア', ascending=False)['車番'].astype(str).tolist()
-rank_groups = ["".join(to_zenkaku(c) for c in ranked[i:i+3]) for i in range(0, len(ranked), 3)]
-score_str = "　｜　".join(rank_groups)
-
-# --- 印（◎~×）を車番に対応して格納（他は－） ---
+# --- 印マップ（最大5つ） ---
 marks = ["◎", "〇", "▲", "△", "×"]
-mark_line = ["－"] * 7  # 全角-
-for i, car in enumerate(ranked[:len(marks)]):
-    idx = int(car) - 1
-    mark_line[idx] = marks[i]
+mark_map = {c: marks[i] if i < len(marks) else "" for i, c in enumerate(ranked_car)}
 
-# --- 印をライン構成順に整列 ---
-mark_parts = []
+# --- ラインごとの各種データまとめ ---
+table_rows = []
 for k in sorted(line_def.keys()):
-    part = "".join(mark_line[c - 1] for c in line_def[k])
-    mark_parts.append(part)
-mark_str = "　｜　".join(mark_parts)
+    cars = line_def[k]
+    line = " ".join(str(c) for c in cars)
+    scores = " ".join(str(c) for c in sorted(cars, key=lambda x: score_rank.get(x, 99)))
+    symbols = " ".join(mark_map.get(c, "") or "－" for c in cars)
+    tenscores = " ".join(str(c) for c in sorted(cars, key=lambda x: tenscore_rank.get(x, 99)))
+    table_rows.append({
+        "ライン": line,
+        "スコア順位": scores,
+        "印": symbols,
+        "得点順位": tenscores
+    })
 
-# --- 得点順位（高得点順に車番並べる） ---
-tenscore_df = pd.DataFrame({
-    '車番': [i+1 for i in range(7)],
-    '得点': rating
-})
-tenscore_df['順位'] = tenscore_df['得点'].rank(ascending=False, method='min').astype(int)
-tenscore_order = tenscore_df.sort_values(by='順位')['車番'].astype(str).tolist()
-tenscore_groups = ["".join(to_zenkaku(c) for c in tenscore_order[i:i+3]) for i in range(0, len(tenscore_order), 3)]
-tenscore_str = "　｜　".join(tenscore_groups)
-
-# --- 出力（Streamlitコードブロック形式） ---
-st.markdown("### ✅ 整列表示（ライン・スコア・印・得点）")
-st.markdown("""
-```
-ライン：{} 
-スコア：{} 
-印　：{} 
-得点：{} 
-```""".format(line_str, score_str, mark_str, tenscore_str))
+# --- 表として出力 ---
+df_summary = pd.DataFrame(table_rows)
+st.markdown("### ✅ 表形式での整列出力（ライン・スコア・印・得点）")
+st.dataframe(df_summary)
