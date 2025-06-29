@@ -613,7 +613,7 @@ anchor_no = anchor["車番"]
 a_line = next((line for line in lines if anchor_no in line), [])
 
 # 他のすべてのライン（空でない全て、単騎も含む）
-other_lines = [line for line in lines if line != a_line and len(line) > 0]
+other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
 
 # 各ラインのスコア合計を算出（単騎も対象）
 line_scores = []
