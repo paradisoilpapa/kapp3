@@ -613,16 +613,15 @@ anchor_no = anchor["車番"]
 lines = [[int(car) for car in line] for line in lines]
 
 
+# --- 空行を除いたラインのみで構成 ---
+non_empty_lines = [line for line in lines if len(line) >= 1]
+
 # --- Aライン（◎が含まれるライン） ---
-a_line = next((line for line in lines if anchor_no in line), [])
-try:
-    a_line_id = lines.index(a_line) if a_line else -1
-except ValueError:
-    a_line_id = -1  # 安全対策：念のため fallback
+a_line = next((line for line in non_empty_lines if anchor_no in line), [])
+a_line_id = non_empty_lines.index(a_line) if a_line in non_empty_lines else -1
 
-# --- A以外のライン（空でないものを対象、単騎含む） ---
-other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
-
+# --- A以外のライン ---
+other_lines = [line for idx, line in enumerate(non_empty_lines) if idx != a_line_id]
 
 # --- B・Cラインをスコア合計で選出（人数で割らず、そのまま合計） ---
 line_scores = []
@@ -642,7 +641,6 @@ taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"] if b_
 
 c_line_scores = [d for d in score_df if d["車番"] in c_line]
 gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"] if c_line_scores else None
-
 
 
 # 各ラインの1番手を取得
