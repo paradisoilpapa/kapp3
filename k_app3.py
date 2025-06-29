@@ -609,6 +609,10 @@ anchor_no = anchor["車番"]
 
 # --- ライン構成前提（lines）と anchor_no（◎の車番）は定義済み ---
 
+# linesをすべて整数に変換（str混入対策）
+lines = [[int(car) for car in line] for line in lines]
+
+
 # --- Aライン（◎が含まれるライン） ---
 a_line = next((line for line in lines if anchor_no in line), [])
 try:
