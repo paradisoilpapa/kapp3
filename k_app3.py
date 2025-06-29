@@ -607,38 +607,47 @@ anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
 anchor = sorted(anchor_candidates, key=lambda x: x["スコア"])[1]
 anchor_no = anchor["車番"]
 
-# --- 前提：lines（ライン構成）と anchor_no（◎の車番）はすでに定義済み ---
+# --- ライン構成前提（lines）と anchor_no（◎の車番）は定義済み ---
 
-# 対抗ライン（Bライン）からスコア最上位の車を取得
-taikou_leader = None
-if len(lines) > 1 and lines[1]:
-    b_line_scores = [d for d in score_df if d["車番"] in lines[1]]
-    if b_line_scores:
-        taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"]
+# ◎のライン（Aライン）
+a_line = next((line for line in lines if anchor_no in line), [])
 
-# 漁夫の利ライン（Cライン）からスコア最上位の車を取得
-gyofu_leader = None
-if len(lines) > 2 and lines[2]:
-    c_line_scores = [d for d in score_df if d["車番"] in lines[2]]
-    if c_line_scores:
-        gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"]
+# 残りのライン（非空）を取得
+other_lines = [line for line in lines if line != a_line and len(line) > 0]
 
+# 各ラインのスコア合計を算出し、対抗ライン（B）・漁夫の利ライン（C）を決定
+line_scores = []
+for line in other_lines:
+    members = [d for d in score_df if d["車番"] in line]
+    line_score_sum = sum([m["スコア"] for m in members])
+    line_scores.append((line, line_score_sum))
 
-# ◎のラインを特定（anchor_noを含むライン）
-anchor_line = [line for line in lines if anchor_no in line]
-anchor_line_members = anchor_line[0] if anchor_line else []
+sorted_lines = sorted(line_scores, key=lambda x: x[1], reverse=True)
+b_line = sorted_lines[0][0] if len(sorted_lines) > 0 else []
+c_line = sorted_lines[1][0] if len(sorted_lines) > 1 else []
 
-# 得点1位を探す（score_dfは前処理済み）
+# 各ラインの1番手を取得
+b_line_scores = [d for d in score_df if d["車番"] in b_line]
+taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"] if b_line_scores else None
+
+c_line_scores = [d for d in score_df if d["車番"] in c_line]
+gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"] if c_line_scores else None
+
+# Aライン構成メンバー
+anchor_line_members = a_line
+
+# 得点1位を取得
 tenscore_top = min(score_df, key=lambda x: x["得点順位"])
 
-# ヒモ③候補（◎が単騎なら得点1位／ライン内なら◎ライン内の得点1位）
+# ヒモ③候補（得点1位 or ◎のライン内得点1位）
+d = score_df
 if len(anchor_line_members) <= 1:
     himo3 = tenscore_top["車番"]
 else:
-    anchor_line_scores = [d for d in score_df if d["車番"] in anchor_line_members]
+    anchor_line_scores = [x for x in d if x["車番"] in anchor_line_members]
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
-# --- ◎を除外して、候補からスコア上位2車を選出 ---
+# --- 2列目構築 ---
 raw_candidates = [taikou_leader, gyofu_leader, himo3]
 second_candidates = [x for x in raw_candidates if x is not None and x != anchor_no]
 
@@ -648,45 +657,39 @@ second_nos = [d["車番"] for d in second_row]
 
 third_base = list(set(second_candidates) - set(second_nos))
 
-
-
-# ヒモ①②：競争得点5〜7位からスコア上位2車（7車立て対応）
+# --- ヒモ①②：得点5〜7位からスコア上位2車 ---
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
 low_sorted = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[:2]
 himo_1 = low_sorted[0]["車番"]
 himo_2 = low_sorted[1]["車番"]
 
-# ヒモ④：競争得点2〜4位から◎を除くスコア上位1車
+# --- ヒモ④：得点2〜4位から◎を除くスコア上位1車 ---
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# --- 3列目構成（順序保持＋重複除去） ---
-temp = [int(himo_1), int(himo_2), int(himo_4)] + [int(x) for x in third_base]
+# --- 3列目構成 ---
+temp = [himo_1, himo_2, himo_4] + third_base
 himo_list = []
 for x in temp:
     if x not in himo_list:
         himo_list.append(x)
 
-# --- 3車しか選ばれていない場合の補完処理 ---
+# --- 補完処理（3車時のみ） ---
 if len(himo_list) == 3:
     third_base_extra = None
     himo_candidate_extra = None
 
-    # --- 1. third_base「にすら選ばれなかった second 候補」から選ぶ
-    # → second_candidates から second_nos と third_base を除いた残り
     second_unused = [x for x in second_candidates if x not in second_nos and x not in third_base and x not in himo_list]
     second_unused_scores = [d for d in score_df if d["車番"] in second_unused]
     if second_unused_scores:
         third_base_extra = max(second_unused_scores, key=lambda x: x["スコア"])
 
-    # --- 2. 得点5〜7位 から himo①② にもれたものを選ぶ
     low_rank_all = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
     himo_selected = [himo_1, himo_2]
     himo_unused = [d for d in low_rank_all if d["車番"] not in himo_selected and d["車番"] not in himo_list]
     if himo_unused:
         himo_candidate_extra = max(himo_unused, key=lambda x: x["スコア"])
 
-    # --- スコアで比較して良い方を補完
     if third_base_extra and himo_candidate_extra:
         better = third_base_extra if third_base_extra["スコア"] >= himo_candidate_extra["スコア"] else himo_candidate_extra
         himo_list.append(better["車番"])
@@ -695,21 +698,20 @@ if len(himo_list) == 3:
     elif himo_candidate_extra:
         himo_list.append(himo_candidate_extra["車番"])
     else:
-        st.warning("⚠️ 補完対象が存在しません（third_base外れ or ヒモ①②外れ）")
+        st.warning("\u26a0\ufe0f 補完対象が存在しません（third_base外れ or ヒモ\uff11\u2460外れ）")
 
-
-# 三連複構成（◎-ヒモ-ヒモ）
+# --- 三連複構成 ---
 bets = set()
 for a, b in itertools.combinations(himo_list, 2):
     combo = tuple(sorted([anchor_no, a, b]))
     bets.add(combo)
 
 # --- 表示 ---
-st.markdown("### 🌟 三連複構成（ハイブリッド）")
+st.markdown("### 三連複構成")
 st.markdown(f"◎：{anchor_no}")
 st.markdown(f"2列目（スコア上位）：{second_nos}")
 st.markdown(f"3列目候補：{sorted(himo_list)}")
-st.markdown(f"🔹 三連複 {len(bets)}点：")
+st.markdown(f"三連複 {len(bets)}点：")
 for b in sorted(bets):
     st.markdown(f"- {b}")
 
