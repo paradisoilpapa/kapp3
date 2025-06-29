@@ -620,17 +620,25 @@ except ValueError:
 other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
 
 
-# 各ラインのスコア合計を算出（単騎も対象）
+# --- B・Cラインをスコア合計で選出（人数で割らず、そのまま合計） ---
 line_scores = []
 for line in other_lines:
     members = [d for d in score_df if d["車番"] in line]
-    line_score_sum = sum([m["スコア"] for m in members])
+    line_score_sum = sum([m["スコア"] for m in members])  # 割らない
     line_scores.append((line, line_score_sum))
 
 # スコア合計の高い順に、Bライン・Cラインとする
 sorted_lines = sorted(line_scores, key=lambda x: x[1], reverse=True)
 b_line = sorted_lines[0][0] if len(sorted_lines) > 0 else []
 c_line = sorted_lines[1][0] if len(sorted_lines) > 1 else []
+
+# 各ラインの1番手を取得
+b_line_scores = [d for d in score_df if d["車番"] in b_line]
+taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"] if b_line_scores else None
+
+c_line_scores = [d for d in score_df if d["車番"] in c_line]
+gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"] if c_line_scores else None
+
 
 
 # 各ラインの1番手を取得
