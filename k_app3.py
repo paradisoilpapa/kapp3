@@ -574,3 +574,12 @@ except NameError:
     st.stop()
     
 
+# --- スコア表（合計スコア順）表示済みとして：df
+
+# --- スコア表を競争得点順に並び替えたものを表示
+df_tenscore_sorted = df.copy()
+df_tenscore_sorted['競争得点'] = rating
+df_tenscore_sorted = df_tenscore_sorted.sort_values(by='競争得点', ascending=False).reset_index(drop=True)
+
+st.markdown("### 📊 スコア表（競争得点順）")
+st.dataframe(df_tenscore_sorted)
