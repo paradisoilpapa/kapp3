@@ -664,14 +664,31 @@ else:
     anchor_line_scores = [x for x in d if x["車番"] in anchor_line_members]
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
-# --- 2列目構築 ---
-raw_candidates = [taikou_leader, gyofu_leader, himo3]
-second_candidates = [x for x in raw_candidates if x is not None and x != anchor_no]
+# --- 2列目構築（◎・対抗・漁夫の利・◎ライン・得点1位からスコア上位2車を選出） ---
 
+# 得点1位（車番）
+tenscore_top_no = tenscore_top["車番"]
+
+# ◎と同じラインの選手（anchor_line_members）から◎を除く
+a_line_others = [x for x in anchor_line_members if x != anchor_no]
+
+# raw候補まとめ
+raw_2nd_candidates = set([
+    anchor_no,            # ◎
+    taikou_leader,        # 対抗
+    gyofu_leader,         # 漁夫
+    tenscore_top_no       # 得点1位
+] + a_line_others)
+
+# None除外 + 重複排除 + anchor_no除外（◎は1列目）
+second_candidates = [x for x in raw_2nd_candidates if x is not None and x != anchor_no]
+
+# スコア上位2車を選出
 candidate_scores = [d for d in score_df if d["車番"] in second_candidates]
 second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
 second_nos = [d["車番"] for d in second_row]
 
+# 残り（3列目へ）
 third_base = list(set(second_candidates) - set(second_nos))
 
 # --- ヒモ①②：得点5〜7位からスコア上位2車 ---
