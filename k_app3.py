@@ -609,11 +609,16 @@ anchor_no = anchor["車番"]
 
 # --- ライン構成前提（lines）と anchor_no（◎の車番）は定義済み ---
 
-# ◎のライン（Aライン）
+# --- Aライン（◎が含まれるライン） ---
 a_line = next((line for line in lines if anchor_no in line), [])
+try:
+    a_line_id = lines.index(a_line) if a_line else -1
+except ValueError:
+    a_line_id = -1  # 安全対策：念のため fallback
 
-# 他のすべてのライン（空でない全て、単騎も含む）
+# --- A以外のライン（空でないものを対象、単騎含む） ---
 other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
+
 
 # 各ラインのスコア合計を算出（単騎も対象）
 line_scores = []
