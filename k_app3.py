@@ -570,12 +570,27 @@ except NameError:
     
 
 # --- 競争得点（rating）を列に追加して並び替え表示
-df_tenscore_sorted = df.copy()
-df_tenscore_sorted["競争得点"] = rating  # 既にst.number_inputから得たリスト
+import pandas as pd
+import streamlit as st
 
-# 得点が高い順に並び替え（降順）
-df_tenscore_sorted = df_tenscore_sorted.sort_values(by="競争得点", ascending=False).reset_index(drop=True)
+# --- 競争得点とスコアは別途取得済み前提 ---
+# rating = [...]  # 競争得点（リスト）
+# final_score_parts = [...]  # スコア要素（リスト）
 
-# 表示
-st.markdown("### 📊 スコア表（競争得点順）")
-st.dataframe(df_tenscore_sorted)
+# --- DataFrame 構築 ---
+df = pd.DataFrame(final_score_parts, columns=[
+    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
+    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
+    'グループ補正', '合計スコア'
+])
+df['競争得点'] = rating
+df['競争得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
+
+# --- 表①：スコア表（元の順） ---
+st.markdown("### スコア表（入力順）")
+st.dataframe(df)
+
+# --- 表②：競争得点順位順の表 ---
+st.markdown("### 選手情報（得点順）")
+df_sorted_by_rating = df.sort_values(by='競争得点順位', ascending=True).reset_index(drop=True)
+st.dataframe(df_sorted_by_rating)
