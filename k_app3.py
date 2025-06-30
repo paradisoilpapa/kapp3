@@ -301,22 +301,17 @@ if st.button("スコア計算実行"):
         return round(total, 2)
 
 
-    def convert_chaku_to_score(values):
-        scores = []
-        for i, v in enumerate(values):
-            v = v.strip()
-            try:
-                chaku = int(v)
-                if 1 <= chaku <= 9:
-                    score = (10 - chaku) / 9
-                    if i == 1:
-                        score *= 0.35
-                    scores.append(score)
-            except ValueError:
-                continue
-        if not scores:
-            return 0.0
-        return round(sum(scores) / len(scores), 2)
+    def score_from_tenscore_list(tenscore_list): 
+        import pandas as pd
+    
+        df = pd.DataFrame({"得点": tenscore_list})
+        df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
+    
+        # 補正しないので全て0.0にする
+        df["最終補正値"] = [0.0] * len(df)
+    
+        return df["最終補正値"].tolist()
+
 
 
 
