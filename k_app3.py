@@ -491,7 +491,7 @@ for i in range(7):
     total = base + wind + kasai + rating_score + rain_corr + symbol_score + line_bonus + bank_bonus + length_bonus
 
     score_parts.append([
-        num, kaku, base, wind, kasai, rating_score,
+        num, kaku, base, wind, rating_score,
         rain_corr, symbol_score, line_bonus, bank_bonus, length_bonus, total
     ])
 
