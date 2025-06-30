@@ -479,7 +479,6 @@ for i in range(7):
     )
 
     chaku_values = chaku_inputs[i]
-    kasai = convert_chaku_to_score(chaku_values) or 0.0
     rating_score = tenscore_score[i]
     rain_corr = lap_adjust(kaku, laps)
     s_bonus = -0.01 * st.session_state.get(f"s_point_{num}", 0)
