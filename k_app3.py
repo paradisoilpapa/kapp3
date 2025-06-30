@@ -604,8 +604,8 @@ score_df = [
     for _, row in df.iterrows()
 ]
 
-# ◎（軸）：競争得点2〜4位の中からスコア中位（2番目）
-anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4]]
+# ◎（軸）：競争得点2〜5位の中からスコア中位（2番目）
+anchor_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4, 5]]
 anchor = sorted(anchor_candidates, key=lambda x: x["スコア"])[1]
 anchor_no = anchor["車番"]
 
@@ -661,7 +661,7 @@ second_nos = [d["車番"] for d in second_row]
 
 third_base = list(set(second_candidates) - set(second_nos))
 
-# --- ヒモ①②：得点5〜9位からスコア上位2車 ---
+# --- ヒモ①②：得点5〜7位からスコア上位2車 ---
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
 low_sorted = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[:2]
 himo_1 = low_sorted[0]["車番"]
