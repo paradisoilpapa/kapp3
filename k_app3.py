@@ -488,7 +488,7 @@ for i in range(7):
     bank_bonus = bank_character_bonus(kaku, bank_angle, straight_length)
     length_bonus = bank_length_adjust(kaku, bank_length)
 
-    total = base + wind + kasai + rating_score + rain_corr + symbol_score + line_bonus + bank_bonus + length_bonus
+    total = base + wind + rating_score + rain_corr + symbol_score + line_bonus + bank_bonus + length_bonus
 
     score_parts.append([
         num, kaku, base, wind, rating_score,
