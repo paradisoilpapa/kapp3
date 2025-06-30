@@ -609,6 +609,11 @@ anchor_candidates = [d for d in score_df if d["得点順位"] in [1, 2, 3, 4]]
 anchor = max(anchor_candidates, key=lambda x: x["スコア"])
 anchor_no = anchor["車番"]
 
+st.markdown("### ◎候補（競争得点1〜4位）とスコア")
+for d in anchor_candidates:
+    st.markdown(f"- 車番：{d['車番']}｜得点順位：{d['得点順位']}｜スコア：{d['スコア']}")
+st.markdown(f"👉 選ばれた◎：{anchor_no}")
+
 
 
 # --- ライン構成前提（lines）と anchor_no（◎の車番）は定義済み ---
