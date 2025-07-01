@@ -641,6 +641,7 @@ else:
     anchor_line_scores = [x for x in d if x["車番"] in anchor_line_members]
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
+
 # --- 2列目構築 ---
 # --- 順位辞書を準備（高い方が1位） ---
 # --- ランク辞書（順位は1が最高位） ---
@@ -659,7 +660,7 @@ second_row = []
 
 if is_solo_anchor:
     # ◎が単騎 → anchor以外の全選手から評価P最小の2名
-    candidates = [d for d in score_df if d["車番"] != anchor_no]
+    candidates = [d.copy() for d in score_df if d["車番"] != anchor_no]
     for d in candidates:
         car = d["車番"]
         d["評価P"] = score_rank[car] + tenscore_rank[car]
@@ -673,7 +674,7 @@ else:
         second_row.append(second_1)
 
     # ② ◎以外かつ他ラインから評価P最小（順位が小さい）1名
-    candidates = [d for d in score_df if d["車番"] not in anchor_line_members and d["車番"] != anchor_no]
+    candidates = [d.copy() for d in score_df if d["車番"] not in anchor_line_members and d["車番"] != anchor_no]
     for d in candidates:
         car = d["車番"]
         d["評価P"] = score_rank[car] + tenscore_rank[car]
@@ -683,6 +684,7 @@ else:
 
 # --- 車番抽出 ---
 second_nos = [d["車番"] for d in second_row]
+
 
 
 
