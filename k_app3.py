@@ -642,20 +642,24 @@ else:
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
 
+# --- ランク辞書（順位は1が最高位） ---
+def get_rank(score_df, key, reverse=False):
+    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
+    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
+
 # --- 2列目構築 ---
-# --- 順位辞書を準備（スコア順位＋得点順位） ---
-score_rank = get_rank(score_df, "スコア", reverse=True)
-rating_rank = get_rank(score_df, "得点", reverse=True)
+score_rank = get_rank(score_df, "スコア", reverse=True)     # 高スコア → 順位1
+rating_rank = get_rank(score_df, "得点", reverse=True)      # 高得点 → 順位1
 
 second_row = []
 
-# ① ◎と同ラインからスコア上位1名（◎除く）
+# 1. ◎と同ラインの中でスコア上位1車（◎を除く）
 same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
 if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
     second_row.append(second_1)
 
-# ② anchor以外全体から、評価P（スコア順位＋得点順位）最小の1名
+# 2. ◎以外の全体から 評価P（スコア順位＋得点順位）最小の1車
 candidates = [d for d in score_df if d["車番"] != anchor_no]
 for d in candidates:
     car = d["車番"]
