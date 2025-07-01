@@ -626,23 +626,6 @@ a_line_id = lines.index(a_line) if a_line in lines else -1
 other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
 
 
-# --- B・Cラインをスコア合計で選出 ---
-line_scores = []
-for line in other_lines:
-    members = [d for d in score_df if d["車番"] in line]
-    line_score_sum = sum([m["スコア"] for m in members])
-    line_scores.append((line, line_score_sum))
-
-sorted_lines = sorted(line_scores, key=lambda x: x[1], reverse=True)
-b_line = sorted_lines[0][0] if len(sorted_lines) > 0 else []
-c_line = sorted_lines[1][0] if len(sorted_lines) > 1 else []
-
-# 各ラインの1番手を取得
-b_line_scores = [d for d in score_df if d["車番"] in b_line]
-taikou_leader = max(b_line_scores, key=lambda x: x["スコア"])["車番"] if b_line_scores else None
-
-c_line_scores = [d for d in score_df if d["車番"] in c_line]
-gyofu_leader = max(c_line_scores, key=lambda x: x["スコア"])["車番"] if c_line_scores else None
 
 # Aライン構成メンバー
 anchor_line_members = a_line
@@ -699,9 +682,7 @@ else:
 # --- 車番のみ抽出 ---
 second_nos = [d["車番"] for d in second_row]
 
-# --- third_base：2列目候補から漏れたもの（後でヒモ候補などに使える） ---
-all_candidate_nos = [d["車番"] for d in score_df if d["車番"] != anchor_no]
-third_base = list(set(all_candidate_nos) - set(second_nos))
+third_base = second_nos.copy()  # ✅ 他ロジックと干渉せず、構成が明確
 
 
 # --- ヒモ①②：得点5〜7位からスコア上位2車 ---
