@@ -580,75 +580,17 @@ import pandas as pd
 import itertools
 import streamlit as st
 
-# --- 競争得点とスコアは別途取得済み前提 ---
-# rating = [...]
-# final_score_parts = [...]
+# --- ◎ 抽出（1列目） ---
+def get_anchor_candidate(score_df):
+    candidates = [d for d in score_df if d["得点順位"] in [1, 2, 3, 4]]
+    return max(candidates, key=lambda x: x["スコア"])
 
-# --- DataFrame 構築 ---
-df = pd.DataFrame(final_score_parts, columns=[
-    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
-    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
-    'グループ補正', '合計スコア'
-])
-df['競争得点'] = rating
-df['競争得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
-
-# --- score_df構築 ---
-score_df = [
-    {
-        "車番": int(row["車番"]),
-        "得点": float(row["競争得点"]),
-        "得点順位": int(row["競争得点順位"]),
-        "スコア": float(row["合計スコア"])
-    }
-    for _, row in df.iterrows()
-]
-
-# ◎（軸）：競争得点1〜4位の中でスコアが最も高い車
-anchor_candidates = [d for d in score_df if d["得点順位"] in [1, 2, 3, 4]]
-anchor = max(anchor_candidates, key=lambda x: x["スコア"])
+anchor = get_anchor_candidate(score_df)
 anchor_no = anchor["車番"]
-
-st.markdown("### ◎候補（競争得点1〜4位）とスコア")
-for d in anchor_candidates:
-    st.markdown(f"- 車番：{d['車番']}｜得点順位：{d['得点順位']}｜スコア：{d['スコア']}")
-st.markdown(f"👉 選ばれた◎：{anchor_no}")
+anchor_line_members = get_line_members(anchor_no)
 
 
-
-# --- ライン構成前提（lines）と anchor_no（◎の車番）は定義済み ---
-
-# --- Aライン（◎が含まれるライン） ---
-a_line = next((line for line in lines if anchor_no in line), [])
-a_line_id = lines.index(a_line) if a_line in lines else -1
-
-# --- A以外のライン（空でないものを対象） ---
-other_lines = [line for idx, line in enumerate(lines) if idx != a_line_id and len(line) >= 1]
-
-
-
-# Aライン構成メンバー
-anchor_line_members = a_line
-
-# 得点1位を取得
-tenscore_top = min(score_df, key=lambda x: x["得点順位"])
-
-# ヒモ③候補（得点1位 or ◎のライン内得点1位）
-d = score_df
-if len(anchor_line_members) <= 1:
-    himo3 = tenscore_top["車番"]
-else:
-    anchor_line_scores = [x for x in d if x["車番"] in anchor_line_members]
-    himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
-
-
-# --- ランク辞書（順位は1が最高位） ---
-def get_rank(score_df, key, reverse=False):
-    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
-    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
-
-# --- 2列目構築 ---
-# --- 2列目構築 ---
+# --- 2列目構築（明確に独立） ---
 def get_rank(score_df, key, reverse=False):
     sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
     return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
@@ -658,13 +600,13 @@ rating_rank = get_rank(score_df, "得点", reverse=True)
 
 second_row = []
 
-# 1. ◎と同ラインの中からスコア上位1名（除くanchor）
+# 1. ◎と同ラインの中からスコア上位1名（除く◎）
 same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
 if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
     second_row.append(second_1)
 
-# 2. anchor以外全体から、評価P（=スコア順位 + 得点順位）が最小の1名
+# 2. ◎を除いた全体から、評価P（スコア順位 + 得点順位）が最小の1名
 candidates = [d for d in score_df if d["車番"] != anchor_no]
 second_2 = min(
     candidates,
@@ -674,46 +616,11 @@ second_row.append(second_2)
 
 second_nos = [d["車番"] for d in second_row if d is not None]
 
+# --- 表示（分割確認用） ---
+st.markdown("### ◎候補（競争得点1〜4位）とスコア")
+for d in sorted([d for d in score_df if d["得点順位"] <= 4], key=lambda x: x["得点順位"]):
+    st.markdown(f"- 車番：{d['車番']}｜得点順位：{d['得点順位']}｜スコア：{d['スコア']}")
+st.markdown(f"👉 選ばれた◎：{anchor_no}")
 
-# --- 3列目構成 ---
-third_base = second_nos.copy()
-
-# 競争得点1位（◎と異なる場合）
-top_score = min(score_df, key=lambda x: x["得点順位"])
-top_score_no = top_score["車番"]
-if top_score_no != anchor_no:
-    third_base.append(top_score_no)
-
-# himo_1：得点5〜7位からスコア上位1車
-low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
-himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番"] if low_rank else None
-
-# himo_4：得点2〜4位から◎を除くスコア上位1車
-up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
-himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"] if up_candidates else None
-
-# 除外対象を明示的に定義
-excluded = {anchor_no, himo_1, himo_4, *third_base}
-
-# 残りの車からスコア1位を追加
-remaining = [d for d in score_df if d["車番"] not in excluded]
-if remaining:
-    extra = max(remaining, key=lambda d: d["スコア"])
-    third_base.append(extra["車番"])
-
-himo_list = list(dict.fromkeys(third_base))
-
-# --- 三連複構成 ---
-bets = set()
-for a, b in itertools.combinations(himo_list, 2):
-    combo = tuple(sorted([anchor_no, a, b]))
-    bets.add(combo)
-
-# --- 表示 ---
-st.markdown("### 三連複構成")
-st.markdown(f"◎：{anchor_no}")
+st.markdown("### 2列目候補（スコア上位）")
 st.markdown(f"2列目（スコア上位）：{second_nos}")
-st.markdown(f"3列目候補：{sorted(himo_list)}")
-st.markdown(f"三連複 {len(bets)}点：")
-for b in sorted(bets):
-    st.markdown(f"- {b}")
