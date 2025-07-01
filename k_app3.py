@@ -664,8 +664,13 @@ if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
     second_row.append(second_1)
 
-# 2. anchor以外全体から、評価P（=スコア順位 + 得点順位）が最小の1名
-candidates = [d for d in score_df if d["車番"] != anchor_no]
+# --- 除外する車番（anchor と second_1） ---
+exclude = {anchor_no}
+if 'second_1' in locals():
+    exclude.add(second_1["車番"])
+
+# 2. anchor・second_1を除いた全体から評価P（スコア順位＋得点順位）が最小の1車
+candidates = [d for d in score_df if d["車番"] not in exclude]
 second_2 = min(
     candidates,
     key=lambda d: (score_rank[d["車番"]] + rating_rank[d["車番"]], score_rank[d["車番"]])
