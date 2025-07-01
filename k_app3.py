@@ -643,44 +643,47 @@ else:
 
 # --- 2列目構築 ---
 # --- 順位辞書を準備（高い方が1位） ---
-def get_rank_by_car(score_df, key):
-    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=(key == "スコア"))
+# --- ランク辞書（順位は1が最高位） ---
+def get_rank(score_df, key, reverse=False):
+    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
     return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
 
-score_rank = get_rank_by_car(score_df, "スコア")
-tenscore_rank = get_rank_by_car(score_df, "得点")
+score_rank = get_rank(score_df, "スコア", reverse=True)     # 高スコア → 順位1
+tenscore_rank = get_rank(score_df, "得点", reverse=True)   # 高得点 → 順位1
 
-# ◎のライン情報
-anchor_line_members = a_line
+# --- ◎のラインメンバーと単騎判定 ---
+anchor_line_members = next((line for line in lines if anchor_no in line), [])
 is_solo_anchor = len(anchor_line_members) <= 1
 
-# --- 2列目構築（順位合計方式） ---
+second_row = []
+
 if is_solo_anchor:
-    # ◎が単騎：◎を除いた全選手から評価Pが小さい順に2車
+    # ◎が単騎 → anchor以外の全選手から評価P最小の2名
     candidates = [d for d in score_df if d["車番"] != anchor_no]
     for d in candidates:
-        d["評価P"] = score_rank[d["車番"]] + tenscore_rank[d["車番"]]
+        car = d["車番"]
+        d["評価P"] = score_rank[car] + tenscore_rank[car]
     second_row = sorted(candidates, key=lambda x: (x["評価P"], score_rank[x["車番"]]))[:2]
 
 else:
-    # ①：◎と同ラインで◎以外、得点順位が最も高い1車
-    same_line_others = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
-    second_1 = min(same_line_others, key=lambda x: x["得点順位"]) if same_line_others else None
-
-    # ②：◎以外の他ラインから評価P最小の1車（◎ラインと被らない）
-    candidates = [d for d in score_df if d["車番"] != anchor_no and d["車番"] not in anchor_line_members]
-    for d in candidates:
-        d["評価P"] = score_rank[d["車番"]] + tenscore_rank[d["車番"]]
-    second_2 = min(candidates, key=lambda x: (x["評価P"], score_rank[x["車番"]])) if candidates else None
-
-    second_row = []
-    if second_1:
+    # ① ◎と同ラインから得点順位が最も高い（＝順位が最小）の1名
+    same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
+    if same_line_candidates:
+        second_1 = min(same_line_candidates, key=lambda x: tenscore_rank[x["車番"]])
         second_row.append(second_1)
-    if second_2:
+
+    # ② ◎以外かつ他ラインから評価P最小（順位が小さい）1名
+    candidates = [d for d in score_df if d["車番"] not in anchor_line_members and d["車番"] != anchor_no]
+    for d in candidates:
+        car = d["車番"]
+        d["評価P"] = score_rank[car] + tenscore_rank[car]
+    if candidates:
+        second_2 = min(candidates, key=lambda x: (x["評価P"], score_rank[x["車番"]]))
         second_row.append(second_2)
 
-# --- 車番のみ抽出 ---
+# --- 車番抽出 ---
 second_nos = [d["車番"] for d in second_row]
+
 
 third_base = second_nos.copy()  # ✅ 他ロジックと干渉せず、構成が明確
 
