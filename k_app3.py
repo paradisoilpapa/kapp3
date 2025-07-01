@@ -676,10 +676,10 @@ second_nos = [d["車番"] for d in second_row]
 
 
 
-# --- 3列目構成 ---
+# --- 3列目構成（初期） ---
 third_base = second_nos.copy()
 
-# --- 得点1位（◎と異なれば追加） ---
+# --- 競争得点1位（◎と異なる場合） ---
 top_score = min(score_df, key=lambda x: x["得点順位"])
 top_score_no = top_score["車番"]
 if top_score_no != anchor_no:
@@ -693,15 +693,17 @@ himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"] if up_candidates else None
 
-# --- himo_list：上記＋himo_1・himo_4 どちらにも入っていない残り全車 ---
-excluded = {himo_1, himo_4}
-already_selected = set(third_base + [anchor_no])
-rest_candidates = [
-    d for d in score_df
-    if d["車番"] not in already_selected and d["車番"] not in excluded
-]
+# --- 除外対象を明示的に定義 ---
+excluded = {anchor_no, himo_1, himo_4, *third_base}
 
-himo_list = third_base + [d["車番"] for d in rest_candidates]
+# --- 残りの車からスコア1位を追加 ---
+remaining = [d for d in score_df if d["車番"] not in excluded]
+if remaining:
+    extra = max(remaining, key=lambda d: d["スコア"])
+    third_base.append(extra["車番"])
+
+# --- 最終3列目候補 ---
+himo_list = list(dict.fromkeys(third_base))  # 重複除去・順序保持
 
 
 
