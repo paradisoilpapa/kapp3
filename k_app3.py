@@ -685,29 +685,34 @@ else:
 second_nos = [d["車番"] for d in second_row]
 
 
+
 # --- 3列目構成 ---
-third_base = second_nos.copy()  # 2列目は再利用OK
+third_base = second_nos.copy()
 
-# --- ヒモ①：得点5〜7位からスコア上位1車 ---
-low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
-himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番"]
-
-# --- ヒモ④：得点2〜4位から◎を除くスコア上位1車 ---
-up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
-himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
-
-# --- 得点1位：◎でない場合のみ追加 ---
+# --- 得点1位（◎と異なれば追加） ---
 top_score = min(score_df, key=lambda x: x["得点順位"])
 top_score_no = top_score["車番"]
-
-# --- himo_list構築（順序保持・再利用許可） ---
-himo_list = third_base + [himo_1, himo_4]
 if top_score_no != anchor_no:
-    himo_list.append(top_score_no)
+    third_base.append(top_score_no)
 
-# --- 重複排除しつつ順序保持 ---
-seen = set()
-himo_list = [x for x in himo_list if not (x in seen or seen.add(x))]
+# --- himo_1：得点5〜7位からスコア上位1車 ---
+low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
+himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番"] if low_rank else None
+
+# --- himo_4：得点2〜4位から◎を除くスコア上位1車 ---
+up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
+himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"] if up_candidates else None
+
+# --- himo_list：上記＋himo_1・himo_4 どちらにも入っていない残り全車 ---
+excluded = {himo_1, himo_4}
+already_selected = set(third_base + [anchor_no])
+rest_candidates = [
+    d for d in score_df
+    if d["車番"] not in already_selected and d["車番"] not in excluded
+]
+
+himo_list = third_base + [d["車番"] for d in rest_candidates]
+
 
 
 # --- 三連複構成 ---
