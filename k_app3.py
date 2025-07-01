@@ -643,6 +643,12 @@ else:
 
 
 # --- 2列目構築 ---
+# --- ランク辞書（順位は1が最高位） ---
+def get_rank(score_df, key, reverse=False):
+    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
+    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
+
+# --- 2列目構築 ---
 score_rank = get_rank(score_df, "スコア", reverse=True)
 tenscore_rank = get_rank(score_df, "得点", reverse=True)
 
@@ -663,6 +669,7 @@ second_2 = min(candidates, key=lambda d: (d["評価P"], score_rank[d["車番"]])
 second_row.append(second_2)
 
 second_nos = [d["車番"] for d in second_row]
+
 
 
 
