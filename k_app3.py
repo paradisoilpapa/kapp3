@@ -685,51 +685,30 @@ else:
 second_nos = [d["車番"] for d in second_row]
 
 
-third_base = second_nos.copy()  # ✅ 他ロジックと干渉せず、構成が明確
+# --- 3列目構成 ---
+third_base = second_nos.copy()  # 2列目は再利用OK
 
-
-# --- ヒモ①②：得点5〜7位からスコア上位2車 ---
+# --- ヒモ①：得点5〜7位からスコア上位1車 ---
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
-low_sorted = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[:2]
-himo_1 = low_sorted[0]["車番"]
-himo_2 = low_sorted[1]["車番"]
+himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番"]
 
 # --- ヒモ④：得点2〜4位から◎を除くスコア上位1車 ---
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"]
 
-# --- 3列目構成 ---
-temp = [himo_1, himo_2, himo_4] + third_base
-himo_list = []
-for x in temp:
-    if x not in himo_list:
-        himo_list.append(x)
+# --- 得点1位：◎でない場合のみ追加 ---
+top_score = min(score_df, key=lambda x: x["得点順位"])
+top_score_no = top_score["車番"]
 
-# --- 補完処理（3車時のみ） ---
-if len(himo_list) == 3:
-    third_base_extra = None
-    himo_candidate_extra = None
+# --- himo_list構築（順序保持・再利用許可） ---
+himo_list = third_base + [himo_1, himo_4]
+if top_score_no != anchor_no:
+    himo_list.append(top_score_no)
 
-    second_unused = [x for x in second_candidates if x not in second_nos and x not in third_base and x not in himo_list]
-    second_unused_scores = [d for d in score_df if d["車番"] in second_unused]
-    if second_unused_scores:
-        third_base_extra = max(second_unused_scores, key=lambda x: x["スコア"])
+# --- 重複排除しつつ順序保持 ---
+seen = set()
+himo_list = [x for x in himo_list if not (x in seen or seen.add(x))]
 
-    low_rank_all = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
-    himo_selected = [himo_1, himo_2]
-    himo_unused = [d for d in low_rank_all if d["車番"] not in himo_selected and d["車番"] not in himo_list]
-    if himo_unused:
-        himo_candidate_extra = max(himo_unused, key=lambda x: x["スコア"])
-
-    if third_base_extra and himo_candidate_extra:
-        better = third_base_extra if third_base_extra["スコア"] >= himo_candidate_extra["スコア"] else himo_candidate_extra
-        himo_list.append(better["車番"])
-    elif third_base_extra:
-        himo_list.append(third_base_extra["車番"])
-    elif himo_candidate_extra:
-        himo_list.append(himo_candidate_extra["車番"])
-    else:
-        st.warning("\u26a0\ufe0f 補完対象が存在しません（third_base外れ or ヒモ\uff11\u2460外れ）")
 
 # --- 三連複構成 ---
 bets = set()
