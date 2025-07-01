@@ -648,17 +648,17 @@ def get_rank(score_df, key, reverse=False):
     return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
 
 # --- 2列目構築 ---
-# --- 2列目構築（正常時のロジック） ---
+# --- 2列目構築 ---
 def get_rank(score_df, key, reverse=False):
     sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
     return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
 
-score_rank = get_rank(score_df, "スコア", reverse=True)     # 高スコア → 順位1
-rating_rank = get_rank(score_df, "得点", reverse=True)     # 高得点 → 順位1
+score_rank = get_rank(score_df, "スコア", reverse=True)
+rating_rank = get_rank(score_df, "得点", reverse=True)
 
 second_row = []
 
-# 1. ○（anchor）と同ラインの中からスコア上位1名（除くanchor）
+# 1. ◎と同ラインの中からスコア上位1名（除くanchor）
 same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
 if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
@@ -666,48 +666,42 @@ if same_line_candidates:
 
 # 2. anchor以外全体から、評価P（=スコア順位 + 得点順位）が最小の1名
 candidates = [d for d in score_df if d["車番"] != anchor_no]
-for d in candidates:
-    car = d["車番"]
-    d["評価P"] = score_rank[car] + rating_rank[car]
 second_2 = min(
     candidates,
-    key=lambda d: (d["評価P"], score_rank[d["車番"]])
+    key=lambda d: (score_rank[d["車番"]] + rating_rank[d["車番"]], score_rank[d["車番"]])
 )
 second_row.append(second_2)
 
-# --- 車番抽出 ---
-second_nos = [d["車番"] for d in second_row]
+second_nos = [d["車番"] for d in second_row if d is not None]
 
 
-# --- 3列目構成（初期） ---
+# --- 3列目構成 ---
 third_base = second_nos.copy()
 
-# --- 競争得点1位（◎と異なる場合） ---
+# 競争得点1位（◎と異なる場合）
 top_score = min(score_df, key=lambda x: x["得点順位"])
 top_score_no = top_score["車番"]
 if top_score_no != anchor_no:
     third_base.append(top_score_no)
 
-# --- himo_1：得点5〜7位からスコア上位1車 ---
+# himo_1：得点5〜7位からスコア上位1車
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
 himo_1 = sorted(low_rank, key=lambda x: x["スコア"], reverse=True)[0]["車番"] if low_rank else None
 
-# --- himo_4：得点2〜4位から◎を除くスコア上位1車 ---
+# himo_4：得点2〜4位から◎を除くスコア上位1車
 up_candidates = [d for d in score_df if d["得点順位"] in [2, 3, 4] and d["車番"] != anchor_no]
 himo_4 = max(up_candidates, key=lambda x: x["スコア"])["車番"] if up_candidates else None
 
-# --- 除外対象を明示的に定義 ---
+# 除外対象を明示的に定義
 excluded = {anchor_no, himo_1, himo_4, *third_base}
 
-# --- 残りの車からスコア1位を追加 ---
+# 残りの車からスコア1位を追加
 remaining = [d for d in score_df if d["車番"] not in excluded]
 if remaining:
     extra = max(remaining, key=lambda d: d["スコア"])
     third_base.append(extra["車番"])
 
-# --- 最終3列目候補 ---
-himo_list = list(dict.fromkeys(third_base))  # 重複除去・順序保持
-
+himo_list = list(dict.fromkeys(third_base))
 
 # --- 三連複構成 ---
 bets = set()
