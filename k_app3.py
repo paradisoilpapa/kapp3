@@ -648,32 +648,32 @@ def get_rank(score_df, key, reverse=False):
     return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
 
 # --- 2列目構築 ---
+# --- 2列目構築（正常時のロジック） ---
+def get_rank(score_df, key, reverse=False):
+    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
+    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
+
 score_rank = get_rank(score_df, "スコア", reverse=True)     # 高スコア → 順位1
-rating_rank = get_rank(score_df, "得点", reverse=True)      # 高得点 → 順位1
+rating_rank = get_rank(score_df, "得点", reverse=True)     # 高得点 → 順位1
 
 second_row = []
 
-# 1. ◎と同ラインの中でスコア上位1車（◎を除く）
+# 1. ○（anchor）と同ラインの中からスコア上位1名（除くanchor）
 same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
 if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
     second_row.append(second_1)
 
-# 2. ◎以外の全体から 評価P（スコア順位＋得点順位）最小の1車
+# 2. anchor以外全体から、評価P（=スコア順位 + 得点順位）が最小の1名
 candidates = [d for d in score_df if d["車番"] != anchor_no]
-for d in candidates:
-    car = d["車番"]
-    d["評価P"] = score_rank[car] + rating_rank[car]
-second_2 = min(candidates, key=lambda d: (d["評価P"], score_rank[d["車番"]]))
+second_2 = min(
+    candidates,
+    key=lambda d: (score_rank[d["車番"]] + rating_rank[d["車番"]], score_rank[d["車番"]])
+)
 second_row.append(second_2)
 
 # --- 車番抽出 ---
 second_nos = [d["車番"] for d in second_row]
-
-
-
-
-
 
 
 # --- 3列目構成（初期） ---
@@ -706,7 +706,6 @@ if remaining:
 himo_list = list(dict.fromkeys(third_base))  # 重複除去・順序保持
 
 
-
 # --- 三連複構成 ---
 bets = set()
 for a, b in itertools.combinations(himo_list, 2):
@@ -721,7 +720,3 @@ st.markdown(f"3列目候補：{sorted(himo_list)}")
 st.markdown(f"三連複 {len(bets)}点：")
 for b in sorted(bets):
     st.markdown(f"- {b}")
-
-# --- 確認用：競争得点順位含むデータ ---
-st.markdown("### 選手情報（得点順）")
-st.dataframe(df.sort_values(by='競争得点順位'))
