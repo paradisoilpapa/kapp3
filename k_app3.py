@@ -659,14 +659,50 @@ else:
     himo3 = min(anchor_line_scores, key=lambda x: x["得点順位"])["車番"]
 
 # --- 2列目構築 ---
-raw_candidates = [taikou_leader, gyofu_leader, himo3]
-second_candidates = [x for x in raw_candidates if x is not None and x != anchor_no]
+# --- 順位辞書を準備（高い方が1位） ---
+def get_rank_by_car(score_df, key):
+    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=(key == "スコア"))
+    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
 
-candidate_scores = [d for d in score_df if d["車番"] in second_candidates]
-second_row = sorted(candidate_scores, key=lambda x: x["スコア"], reverse=True)[:2]
+score_rank = get_rank_by_car(score_df, "スコア")
+tenscore_rank = get_rank_by_car(score_df, "得点")
+
+# ◎のライン情報
+anchor_line_members = a_line
+is_solo_anchor = len(anchor_line_members) <= 1
+
+# --- 2列目構築（順位合計方式） ---
+if is_solo_anchor:
+    # ◎が単騎：◎を除いた全選手から評価Pが小さい順に2車
+    candidates = [d for d in score_df if d["車番"] != anchor_no]
+    for d in candidates:
+        d["評価P"] = score_rank[d["車番"]] + tenscore_rank[d["車番"]]
+    second_row = sorted(candidates, key=lambda x: (x["評価P"], score_rank[x["車番"]]))[:2]
+
+else:
+    # ①：◎と同ラインで◎以外、得点順位が最も高い1車
+    same_line_others = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
+    second_1 = min(same_line_others, key=lambda x: x["得点順位"]) if same_line_others else None
+
+    # ②：◎以外の他ラインから評価P最小の1車（◎ラインと被らない）
+    candidates = [d for d in score_df if d["車番"] != anchor_no and d["車番"] not in anchor_line_members]
+    for d in candidates:
+        d["評価P"] = score_rank[d["車番"]] + tenscore_rank[d["車番"]]
+    second_2 = min(candidates, key=lambda x: (x["評価P"], score_rank[x["車番"]])) if candidates else None
+
+    second_row = []
+    if second_1:
+        second_row.append(second_1)
+    if second_2:
+        second_row.append(second_2)
+
+# --- 車番のみ抽出 ---
 second_nos = [d["車番"] for d in second_row]
 
-third_base = list(set(second_candidates) - set(second_nos))
+# --- third_base：2列目候補から漏れたもの（後でヒモ候補などに使える） ---
+all_candidate_nos = [d["車番"] for d in score_df if d["車番"] != anchor_no]
+third_base = list(set(all_candidate_nos) - set(second_nos))
+
 
 # --- ヒモ①②：得点5〜7位からスコア上位2車 ---
 low_rank = [d for d in score_df if d["得点順位"] in [5, 6, 7]]
