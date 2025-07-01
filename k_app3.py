@@ -643,23 +643,19 @@ else:
 
 
 # --- 2列目構築 ---
-# --- 2列目構築（正常時のロジック） ---
-def get_rank(score_df, key, reverse=False):
-    sorted_list = sorted(score_df, key=lambda x: x[key], reverse=reverse)
-    return {d["車番"]: i + 1 for i, d in enumerate(sorted_list)}
-
-score_rank = get_rank(score_df, "スコア", reverse=True)     # 高スコア → 順位1
-rating_rank = get_rank(score_df, "得点", reverse=True)     # 高得点 → 順位1
+# --- 順位辞書を準備（スコア順位＋得点順位） ---
+score_rank = get_rank(score_df, "スコア", reverse=True)
+rating_rank = get_rank(score_df, "得点", reverse=True)
 
 second_row = []
 
-# 1. ○（anchor）と同ラインの中からスコア上位1名（除くanchor）
+# ① ◎と同ラインからスコア上位1名（◎除く）
 same_line_candidates = [d for d in score_df if d["車番"] in anchor_line_members and d["車番"] != anchor_no]
 if same_line_candidates:
     second_1 = max(same_line_candidates, key=lambda d: d["スコア"])
     second_row.append(second_1)
 
-# 2. anchor以外全体から、評価P（=スコア順位 + 得点順位）が最小の1名
+# ② anchor以外全体から、評価P（スコア順位＋得点順位）最小の1名
 candidates = [d for d in score_df if d["車番"] != anchor_no]
 for d in candidates:
     car = d["車番"]
@@ -669,7 +665,6 @@ second_row.append(second_2)
 
 # --- 車番抽出 ---
 second_nos = [d["車番"] for d in second_row]
-
 
 
 
