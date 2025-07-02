@@ -576,3 +576,10 @@ except NameError:
     st.stop()
     
 
+# --- スコア表を競争得点順でソート ---
+df_sorted_by_rating = df.sort_values(by="競争得点", ascending=False).reset_index(drop=True)
+
+# --- 表の表示 ---
+st.markdown("#### 🔢 競争得点順スコア表")
+st.dataframe(df_sorted_by_rating.style.format(precision=1))
+
