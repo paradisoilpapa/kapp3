@@ -562,12 +562,24 @@ for row in score_parts:
 import streamlit as st
 import pandas as pd
 
-# --- dfの構築（この位置に移動） ---
+# --- dfの構築 ---
 df = pd.DataFrame(final_score_parts, columns=[
     '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
     '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
     'グループ補正', '合計スコア'
 ])
+
+# --- 競争得点が存在しなければ追加（必要な場合のみ） ---
+if '競争得点' not in df.columns:
+    try:
+        if len(rating) == len(df):
+            df['競争得点'] = rating
+        else:
+            st.error("競争得点の数がデータと一致しません。")
+            st.stop()
+    except NameError:
+        st.error("競争得点データが未定義です。")
+        st.stop()
 
 # --- エラーハンドリング ---
 if df.empty:
@@ -576,8 +588,13 @@ if df.empty:
 
 required_cols = {'車番', '合計スコア', '競争得点'}
 if not required_cols.issubset(df.columns):
-    st.error("必要な列（車番・合計スコア・競争得点）が不足しています。")
+    st.error("スコア計算表に必要な列が不足しています。")
+    st.write("現在の列:", df.columns.tolist())
     st.stop()
+
+# --- スコア順の計算表の表示 ---
+st.markdown("### 📊 合計スコア順スコア表")
+st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
 
 # --- 選考スコア計算関数 ---
 def compute_selection_score(df):
@@ -613,6 +630,6 @@ st.markdown("### 🎯 選考構成")
 st.markdown(f"◎（選考基準1位）：{anchor_no}")
 st.markdown(f"紐（スコア1位＋選考スコア下位3車）：{himo_nos}")
 
-# --- デバッグ用：選考スコア付きのソート表（確認用） ---
+# --- 選考スコア付きスコア表の表示 ---
 st.markdown("### 🔎 選考スコア付きスコア表")
 st.dataframe(df_sorted[['車番', '合計スコア', '競争得点', 'スコア順位', '得点順位', '選考スコア']])
