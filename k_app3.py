@@ -557,61 +557,54 @@ for row in score_parts:
     new_total = row[-1] + group_corr
     final_score_parts.append(row[:-1] + [group_corr, new_total])
 
-# --- 表示用DataFrame ---
+# --- 前提：df はすでに競争得点と合計スコアを含む DataFrame として存在している ---
 import streamlit as st
 import pandas as pd
 
-# --- ▼ 入力：競争得点 ---
-st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"選考スコア得点_{i}") for i in range(7)]
-
-
-# --- ▼ スコア構成（すでに計算済みとしてfinal_score_partsに格納済） ---
-# final_score_parts = [[車番, 脚質, ..., 合計スコア], ...] 形式
-
-df = pd.DataFrame(final_score_parts, columns=[
-    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
-    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
-    'グループ補正', '合計スコア'
-])
-
-# --- ▼ エラーチェック ---
-try:
-    if not final_score_parts:
-        st.warning("スコアが計算されていません。入力や処理を確認してください。")
-        st.stop()
-except NameError:
-    st.warning("スコアデータが定義されていません。")
+# --- エラーハンドリング ---
+if df.empty:
+    st.error("データが空です。スコアを計算してください。")
     st.stop()
 
-# --- ▼ 得点列の追加（←ここがなければKeyErrorになる） ---
-df['競争得点'] = rating
+required_cols = {'車番', '合計スコア', '競争得点'}
+if not required_cols.issubset(df.columns):
+    st.error("必要な列（車番・合計スコア・競争得点）が不足しています。")
+    st.stop()
 
-# --- ▼ 表示：スコア順ソート（確認用） ---
-st.markdown("### 📊 合計スコア順")
-st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
+# --- 選考スコア計算関数 ---
+def compute_selection_score(df):
+    df['スコア順位'] = df['合計スコア'].rank(ascending=False, method='min').astype(int)
+    df['得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
+    df['選考スコア'] = df['スコア順位'] + df['得点順位']
+    return df
 
-# --- ▼ 順位と選考スコアの計算 ---
-df['スコア順位'] = df['合計スコア'].rank(ascending=False, method='min').astype(int)
-df['得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
-df['選考スコア'] = df['スコア順位'] + df['得点順位']
+# --- 選考構成構築関数 ---
+def get_selection_structure(df):
+    df = compute_selection_score(df)
+    df_sorted = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
 
-# --- ▼ ◎抽出：選考スコア → スコア順位で優先
-df = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
-anchor_row = df.iloc[0]
-anchor_no = int(anchor_row['車番'])
+    anchor_row = df_sorted.iloc[0]
+    anchor_no = int(anchor_row['車番'])
 
-# --- ▼ 総合スコア1位（重複ありでもOK）
-score1_no = int(df[df['スコア順位'] == 1].iloc[0]['車番'])
+    score1_row = df[df['スコア順位'] == 1].iloc[0]
+    score1_no = int(score1_row['車番'])
 
-# --- ▼ 選考スコア下位（大きい方）から3車（◎除外）
-low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
-low_nos = low_candidates['車番'].head(3).astype(int).tolist()
+    # ◎除外し、選考スコア下位から3車選出
+    low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
+    low_nos = low_candidates['車番'].head(3).astype(int).tolist()
 
-# --- ▼ 紐構成（◎を除外、重複可）
-himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
+    # 紐構成（◎除外）
+    himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
 
-# --- ▼ 出力：構成結果 ---
-st.markdown("### 🎯 選考構成（◎＋紐）")
+    return anchor_no, himo_nos, df_sorted
+
+# --- 実行・表示 ---
+anchor_no, himo_nos, df_sorted = get_selection_structure(df)
+
+st.markdown("### 🎯 選考構成")
 st.markdown(f"◎（選考基準1位）：{anchor_no}")
 st.markdown(f"紐（スコア1位＋選考スコア下位3車）：{himo_nos}")
+
+# --- デバッグ用：選考スコア付きのソート表（確認用） ---
+st.markdown("### 🔎 選考スコア付きスコア表")
+st.dataframe(df_sorted[['車番', '合計スコア', '競争得点', 'スコア順位', '得点順位', '選考スコア']])
