@@ -613,4 +613,4 @@ himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
 # --- ▼ 出力：構成結果 ---
 st.markdown("### 🎯 選考構成（◎＋紐）")
 st.markdown(f"◎（選考基準1位）：{anchor_no}")
-st.markdown(f"紐（ス
+st.markdown(f"紐（スコア1位＋選考スコア下位3車）：{himo_nos}")
