@@ -563,7 +563,8 @@ import pandas as pd
 
 # --- ▼ 入力：競争得点 ---
 st.subheader("▼ 競争得点入力")
-rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"rate_{i}") for i in range(7)]
+rating = [st.number_input(f"{i+1}番得点", value=55.0, step=0.1, key=f"選考スコア得点_{i}") for i in range(7)]
+
 
 # --- ▼ スコア構成（すでに計算済みとしてfinal_score_partsに格納済） ---
 # final_score_parts = [[車番, 脚質, ..., 合計スコア], ...] 形式
