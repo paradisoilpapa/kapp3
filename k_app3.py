@@ -558,8 +558,16 @@ for row in score_parts:
     final_score_parts.append(row[:-1] + [group_corr, new_total])
 
 # --- 前提：df はすでに競争得点と合計スコアを含む DataFrame として存在している ---
+# --- 前提：df はすでに競争得点と合計スコアを含む DataFrame として存在している ---
 import streamlit as st
 import pandas as pd
+
+# --- dfの構築（この位置に移動） ---
+df = pd.DataFrame(final_score_parts, columns=[
+    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
+    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
+    'グループ補正', '合計スコア'
+])
 
 # --- エラーハンドリング ---
 if df.empty:
