@@ -579,7 +579,32 @@ except NameError:
 # --- スコア表を競争得点順でソート ---
 df_sorted_by_rating = df.sort_values(by="競争得点", ascending=False).reset_index(drop=True)
 
-# --- 表の表示 ---
-st.markdown("#### 🔢 競争得点順スコア表")
-st.dataframe(df_sorted_by_rating.style.format(precision=1))
+# --- 前提: df に以下の列が含まれている ---
+# 車番, 合計スコア, 競争得点
+
+# --- 順位計算 ---
+df['スコア順位'] = df['合計スコア'].rank(ascending=False, method='min').astype(int)
+df['得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
+df['選考スコア'] = df['スコア順位'] + df['得点順位']
+
+# --- 選考スコアが同値のとき、スコア順位でソートして優先する ---
+df = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
+anchor_row = df.iloc[0]
+anchor_no = int(anchor_row['車番'])
+
+# --- 総合スコア1位 ---
+score1_row = df[df['スコア順位'] == 1].iloc[0]
+score1_no = int(score1_row['車番'])
+
+# --- 選考スコアの下位（大きい方）3車を選ぶ（anchorは除外） ---
+low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
+low_nos = low_candidates['車番'].head(3).astype(int).tolist()
+
+# --- 紐リスト（anchor除外、重複可） ---
+himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
+
+# --- 重複排除したいなら：list(set(...)) にすればよいが、ここでは保持 ---
+st.markdown("### 🎯 選考構成")
+st.markdown(f"◎（選考基準1位）：{anchor_no}")
+st.markdown(f"紐（スコア1位＋選考下位3車）：{himo_nos}")
 
