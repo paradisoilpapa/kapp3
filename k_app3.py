@@ -558,7 +558,100 @@ for row in score_parts:
     final_score_parts.append(row[:-1] + [group_corr, new_total])
 
 # --- 前提：df はすでに競争得点と合計スコアを含む DataFrame として存在している ---
-File "/mount/src/kapp3/k_app3.py", line 647
-      third_pick = None
+# --- 前提：df はすでに競争得点と合計スコアを含む DataFrame として存在している ---
+import streamlit as st
+import pandas as pd
+
+# --- dfの構築 ---
+df = pd.DataFrame(final_score_parts, columns=[
+    '車番', '脚質', '基本', '風補正', '着順補正', '得点補正',
+    '周回補正', 'SB印補正', 'ライン補正', 'バンク補正', '周長補正',
+    'グループ補正', '合計スコア'
+])
+
+# --- 競争得点が存在しなければ追加（必要な場合のみ） ---
+if '競争得点' not in df.columns:
+    try:
+        if len(rating) == len(df):
+            df['競争得点'] = rating
+        else:
+            st.error("競争得点の数がデータと一致しません。")
+            st.stop()
+    except NameError:
+        st.error("競争得点データが未定義です。")
+        st.stop()
+
+# --- エラーハンドリング ---
+if df.empty:
+    st.error("データが空です。スコアを計算してください。")
+    st.stop()
+
+required_cols = {'車番', '合計スコア', '競争得点'}
+if not required_cols.issubset(df.columns):
+    st.error("スコア計算表に必要な列が不足しています。")
+    st.write("現在の列:", df.columns.tolist())
+    st.stop()
+
+# --- スコア順の計算表の表示 ---
+st.markdown("### 📊 合計スコア順スコア表")
+st.dataframe(df.sort_values(by='合計スコア', ascending=False).reset_index(drop=True))
+
+# --- 選考スコア計算関数 ---
+def compute_selection_score(df):
+    df['スコア順位'] = df['合計スコア'].rank(ascending=False, method='min').astype(int)
+    df['得点順位'] = df['競争得点'].rank(ascending=False, method='min').astype(int)
+    df['選考スコア'] = df['スコア順位'] + df['得点順位']
+    return df
+
+# --- 完全版選考構成関数 ---
+def get_selection_structure(df):
+    df = compute_selection_score(df)
+    df_sorted = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
+
+    # ○（選考基準 1位）
+    anchor_row = df_sorted.iloc[0]
+    anchor_no = int(anchor_row['車番'])
+
+    # スコア 1位の車号 (anchor_no は除外)
+    score1_no = int(df[df['スコア順位'] == 1].iloc[0]['車番'])
+
+    # 選考スコア下位3車 (anchor_no と score1_no を除外)
+    low_nos = (
+        df[(df['車番'] != anchor_no) & (df['車番'] != score1_no)]
+        .sort_values(by='選考スコア', ascending=False)['車番']
+        .astype(int)
+        .head(3)
+        .tolist()
+    )
+
+    # ヒモ候補4車：スコア 1位 + 下位3車
+    himo_candidates = [score1_no] + low_nos
+
+    # ヒモ：ヒモ候補の中からスコア順位上位2車
+    himo_nos = (
+        df[df['車番'].isin(himo_candidates)]
+        .sort_values(by='スコア順位')['車番']
+        .astype(int)
+        .head(2)
+        .tolist()
+    )
+
+    # 2列目：ヒモ候補の中でヒモに選ばれなかった2車
+    second_candidates = [no for no in himo_candidates if no not in himo_nos]
+
+    return anchor_no, himo_nos, second_candidates, df_sorted
+
+# --- 実行・表示 ---
+anchor_no, himo_nos, second_candidates, df_sorted = get_selection_structure(df)
+
+st.markdown("### 🌟 選考構成")
+st.markdown(f"○（選考基準 1位）：{anchor_no}")
+st.markdown(f"ヒモ（スコア順位上位2車）：{himo_nos}")
+st.markdown(f"2列目（ヒモ候補中漏れ2車）：{second_candidates}")
+
+# --- 選考スコア付きスコア表の表示 ---
+st.markdown("### 🔎 選考スコア付きスコア表")
+st.dataframe(df_sorted[['車番', '合計スコア', '競争得点', 'スコア順位', '得点順位', '選考スコア']])
+
      ^
 IndentationError: unexpected indent
