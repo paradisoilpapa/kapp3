@@ -603,7 +603,7 @@ def compute_selection_score(df):
     df['選考スコア'] = df['スコア順位'] + df['得点順位']
     return df
 
-# --- 正しい順序の選考構成関数（あなたの意図どおりの完全版） ---
+# --- 正しい順序の選考構成関数（完成版） ---
 def get_selection_structure(df):
     df = compute_selection_score(df)
     df_sorted = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
@@ -617,25 +617,24 @@ def get_selection_structure(df):
     score1_no = int(score1_row['車番'])
 
     low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
-    low_nos = low_candidates['車番'].head(3).astype(int).tolist()
-    himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
+    himo_nos = [n for n in [score1_no] + low_candidates['車番'].head(3).astype(int).tolist() if n != anchor_no]
 
-    # 3列目（先に選出）スコア1位＋競争得点5〜7位から選出、重複除外
+    # 2列目（特別枠）：スコア1位＋得点5〜7位から2車（重複除外）
     low_rating_nos = df[df['得点順位'].isin([5,6,7])].sort_values(by='合計スコア', ascending=False)['車番'].astype(int).tolist()
     candidate_nos = [score1_no] + low_rating_nos
 
-    third_pick = None
-    for no in candidate_nos:
-        if no not in [anchor_no] + himo_nos:
-            third_pick = no
-            break
-
-    # 2列目（漏れた2車）＝3列目候補から漏れた2車
     second_candidates = []
     for no in candidate_nos:
-        if no not in [anchor_no] + himo_nos + ([third_pick] if third_pick else []):
+        if no not in [anchor_no] + himo_nos:
             second_candidates.append(no)
         if len(second_candidates) >= 2:
+            break
+
+    # 3列目（押さえ枠）：2列目に漏れた車を1車（なければ該当なし）
+    third_pick = None
+    for no in candidate_nos:
+        if no not in [anchor_no] + himo_nos + second_candidates:
+            third_pick = no
             break
 
     return anchor_no, himo_nos, second_candidates, third_pick, df_sorted
@@ -643,11 +642,11 @@ def get_selection_structure(df):
 # --- 実行・表示 ---
 anchor_no, himo_nos, second_candidates, third_pick, df_sorted = get_selection_structure(df)
 
-st.markdown("### 🎯 選考構成")
-st.markdown(f"◎（選考基準1位）：{anchor_no}")
-st.markdown(f"2列目（特別候補から漏れた2車）：{second_candidates}")
+st.markdown("### 🌟 選考構成")
+st.markdown(f"○（選考基準 1位）：{anchor_no}")
+st.markdown(f"2列目（特別候補枠）：{second_candidates}")
 third_pick_display = third_pick if third_pick is not None else "該当なし"
-st.markdown(f"3列目（特別選出枠）：{third_pick_display}")
+st.markdown(f"3列目（特別候補から漏れた抵え枠）：{third_pick_display}")
 
 # --- 選考スコア付きスコア表の表示 ---
 st.markdown("### 🔎 選考スコア付きスコア表")
