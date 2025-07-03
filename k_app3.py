@@ -28,7 +28,7 @@ position_multipliers = {
 }
 
 # --- 基本スコア（脚質ごとの基準値） ---
-base_score = {'逃': 4.72, '両': 4.93, '追': 5.35}
+base_score = {'逃': 4.78, '両': 4.93, '追': 5.29}
 
 # --- 状態保持 ---
 if "selected_wind" not in st.session_state:
@@ -603,56 +603,33 @@ def compute_selection_score(df):
     df['選考スコア'] = df['スコア順位'] + df['得点順位']
     return df
 
-# --- 完全版選考構成関数 ---
+# --- 選考構成構築関数 ---
 def get_selection_structure(df):
     df = compute_selection_score(df)
     df_sorted = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
 
-    # ○（選考基準 1位）
     anchor_row = df_sorted.iloc[0]
     anchor_no = int(anchor_row['車番'])
 
-    # スコア 1位の車号
-    score1_no = int(df[df['スコア順位'] == 1].iloc[0]['車番'])
+    score1_row = df[df['スコア順位'] == 1].iloc[0]
+    score1_no = int(score1_row['車番'])
 
-    # ヒモ候補初期化
-    himo_candidates = []
-    if score1_no != anchor_no:
-        himo_candidates.append(score1_no)
+    # ◎除外し、選考スコア下位から3車選出
+    low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
+    low_nos = low_candidates['車番'].head(3).astype(int).tolist()
 
-    # 選考スコア下位3車 (anchor_no と score1_no を除外)
-    low_nos = (
-        df[(df['車番'] != anchor_no) & (df['車番'] != score1_no)]
-        .sort_values(by='選考スコア', ascending=False)['車番']
-        .astype(int)
-        .head(3)
-        .tolist()
-    )
-    himo_candidates.extend(low_nos)
+    # 紐構成（◎除外）
+    himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
 
-    # ヒモ：ヒモ候補の中からスコア順位上位2車
-    himo_nos = (
-        df[df['車番'].isin(himo_candidates)]
-        .sort_values(by='スコア順位')['車番']
-        .astype(int)
-        .head(2)
-        .tolist()
-    )
-
-    # 2列目：ヒモ候補の中でヒモに選ばれなかった車
-    second_candidates = [no for no in himo_candidates if no not in himo_nos]
-
-    return anchor_no, himo_nos, second_candidates, df_sorted
+    return anchor_no, himo_nos, df_sorted
 
 # --- 実行・表示 ---
-anchor_no, himo_nos, second_candidates, df_sorted = get_selection_structure(df)
+anchor_no, himo_nos, df_sorted = get_selection_structure(df)
 
-st.markdown("### 🌟 選考構成")
-st.markdown(f"○（選考基準 1位）：{anchor_no}")
-st.markdown(f"ヒモ（スコア順位上位2車）：{himo_nos}")
-st.markdown(f"2列目（ヒモ候補中漏れ車）：{second_candidates}")
+st.markdown("### 🎯 選考構成")
+st.markdown(f"◎（選考基準1位）：{anchor_no}")
+st.markdown(f"紐（スコア1位＋選考スコア下位3車）：{himo_nos}")
 
 # --- 選考スコア付きスコア表の表示 ---
 st.markdown("### 🔎 選考スコア付きスコア表")
 st.dataframe(df_sorted[['車番', '合計スコア', '競争得点', 'スコア順位', '得点順位', '選考スコア']])
-
