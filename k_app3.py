@@ -612,8 +612,13 @@ def get_selection_structure(df):
     anchor_row = df_sorted.iloc[0]
     anchor_no = int(anchor_row['車番'])
 
-    # スコア 1位の車号 (anchor_no は除外)
+    # スコア 1位の車号
     score1_no = int(df[df['スコア順位'] == 1].iloc[0]['車番'])
+
+    # ヒモ候補初期化
+    himo_candidates = []
+    if score1_no != anchor_no:
+        himo_candidates.append(score1_no)
 
     # 選考スコア下位3車 (anchor_no と score1_no を除外)
     low_nos = (
@@ -623,9 +628,7 @@ def get_selection_structure(df):
         .head(3)
         .tolist()
     )
-
-    # ヒモ候補4車：スコア 1位 + 下位3車
-    himo_candidates = [score1_no] + low_nos
+    himo_candidates.extend(low_nos)
 
     # ヒモ：ヒモ候補の中からスコア順位上位2車
     himo_nos = (
@@ -636,7 +639,7 @@ def get_selection_structure(df):
         .tolist()
     )
 
-    # 2列目：ヒモ候補の中でヒモに選ばれなかった2車
+    # 2列目：ヒモ候補の中でヒモに選ばれなかった車
     second_candidates = [no for no in himo_candidates if no not in himo_nos]
 
     return anchor_no, himo_nos, second_candidates, df_sorted
@@ -647,8 +650,9 @@ anchor_no, himo_nos, second_candidates, df_sorted = get_selection_structure(df)
 st.markdown("### 🌟 選考構成")
 st.markdown(f"○（選考基準 1位）：{anchor_no}")
 st.markdown(f"ヒモ（スコア順位上位2車）：{himo_nos}")
-st.markdown(f"2列目（ヒモ候補中漏れ2車）：{second_candidates}")
+st.markdown(f"2列目（ヒモ候補中漏れ車）：{second_candidates}")
 
 # --- 選考スコア付きスコア表の表示 ---
 st.markdown("### 🔎 選考スコア付きスコア表")
 st.dataframe(df_sorted[['車番', '合計スコア', '競争得点', 'スコア順位', '得点順位', '選考スコア']])
+
