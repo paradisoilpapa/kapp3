@@ -603,32 +603,47 @@ def compute_selection_score(df):
     df['選考スコア'] = df['スコア順位'] + df['得点順位']
     return df
 
-# --- 選考構成構築関数 ---
+# --- 新選考構成関数（依頼仕様完全対応版） ---
 def get_selection_structure(df):
     df = compute_selection_score(df)
     df_sorted = df.sort_values(by=['選考スコア', 'スコア順位']).reset_index(drop=True)
 
+    # ◎（選考スコア最上位）
     anchor_row = df_sorted.iloc[0]
     anchor_no = int(anchor_row['車番'])
 
+    # 現行ヒモ候補
     score1_row = df[df['スコア順位'] == 1].iloc[0]
     score1_no = int(score1_row['車番'])
 
-    # ◎除外し、選考スコア下位から3車選出
     low_candidates = df[df['車番'] != anchor_no].sort_values(by='選考スコア', ascending=False)
     low_nos = low_candidates['車番'].head(3).astype(int).tolist()
-
-    # 紐構成（◎除外）
     himo_nos = [n for n in [score1_no] + low_nos if n != anchor_no]
 
-    return anchor_no, himo_nos, df_sorted
+    # 新：2列目（himo_nos以外から上位2車）
+    others = df[~df['車番'].isin([anchor_no] + himo_nos)]
+    second_candidates = others.sort_values(by='選考スコア').head(2)['車番'].astype(int).tolist()
+
+    # 新：3列目（スコア1位＋競争得点5〜7位から1車、重複除外）
+    top_score_no = score1_no
+    low_rating_nos = df[df['得点順位'].isin([5,6,7])].sort_values(by='合計スコア', ascending=False)['車番'].astype(int).tolist()
+    candidate_nos = [top_score_no] + low_rating_nos
+
+    third_pick = None
+    for no in candidate_nos:
+        if no not in [anchor_no] + himo_nos + second_candidates:
+            third_pick = no
+            break
+
+    return anchor_no, himo_nos, second_candidates, third_pick, df_sorted
 
 # --- 実行・表示 ---
-anchor_no, himo_nos, df_sorted = get_selection_structure(df)
+anchor_no, himo_nos, second_candidates, third_pick, df_sorted = get_selection_structure(df)
 
 st.markdown("### 🎯 選考構成")
 st.markdown(f"◎（選考基準1位）：{anchor_no}")
-st.markdown(f"紐（スコア1位＋選考スコア下位3車）：{himo_nos}")
+st.markdown(f"2列目（漏れた2車）：{second_candidates}")
+st.markdown(f"3列目（特別選出枠）：{third_pick}")
 
 # --- 選考スコア付きスコア表の表示 ---
 st.markdown("### 🔎 選考スコア付きスコア表")
