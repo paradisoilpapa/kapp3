@@ -488,8 +488,8 @@ for i in range(7):
     kasai = convert_chaku_to_score(chaku_values) or 0.0
     rating_score = tenscore_score[i]
     rain_corr = lap_adjust(kaku, laps)
-    s_bonus = -0.01 * st.session_state.get(f"s_point_{num}", 0)
-    b_bonus = 0.05 * st.session_state.get(f"b_point_{num}", 0)
+    s_bonus = 0.025 * st.session_state.get(f"s_point_{num}", 0)
+    b_bonus = 0.025 * st.session_state.get(f"b_point_{num}", 0)
     symbol_score = s_bonus + b_bonus
     line_bonus = line_member_bonus(line_order[i])
     bank_bonus = bank_character_bonus(kaku, bank_angle, straight_length)
