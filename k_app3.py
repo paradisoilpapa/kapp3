@@ -428,7 +428,7 @@ def compute_group_bonus(score_parts, line_def):
                 break
 
     sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
-    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.08, 0.05, 0.03]
+    bonus_values =  [0.125, 0.1, 0.075, 0.05, 0.04, 0.02, 0.01]
     bonus_map = {
         group: bonus_values[idx] if idx < len(bonus_values) else 0.0
         for idx, (group, _) in enumerate(sorted_lines)
@@ -524,7 +524,7 @@ def compute_group_bonus(score_parts, line_def):
 
     # 順位を決定（合計スコアベース）
     sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
-    bonus_values = [0.25, 0.2, 0.15, 0.1, 0.08, 0.05, 0.03]
+    bonus_values = [0.125, 0.1, 0.075, 0.05, 0.04, 0.02, 0.01]
 
     bonus_map = {
         group: bonus_values[idx] if idx < len(bonus_values) else 0.0
