@@ -388,7 +388,7 @@ if st.button("スコア計算実行"):
         if idx < 9
     }
 
-    　　　　return bonus_map
+    return bonus_map
 
 
 
