@@ -366,26 +366,9 @@ if st.button("スコア計算実行"):
 
 
     def compute_group_bonus(score_parts, line_def):
-        group_scores = {k: 0.0 for k in line_def.keys()}
-        group_counts = {k: 0 for k in line_def.keys()}
-    
-    # 各ラインの合計スコアと人数を集計
-    for entry in score_parts:
-        car_no, score = entry[0], entry[-1]
-        for group in line_def:
-            if car_no in line_def[group]:
-                group_scores[group] += score
-                group_counts[group] += 1
-                break
+    group_scores = {k: 0.0 for k in line_def.keys()}
+    group_counts = {k: 0 for k in line_def.keys()}
 
-    # 合計スコアで順位を決定（平均ではなく合計）
-    sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
-
-    # 順位に応じてボーナス値を割当
-    def compute_group_bonus(score_parts, line_def):
-        group_scores = {k: 0.0 for k in line_def.keys()}
-        group_counts = {k: 0 for k in line_def.keys()}
-    
     # 各ラインの合計スコアと人数を集計
     for entry in score_parts:
         car_no, score = entry[0], entry[-1]
@@ -403,7 +386,20 @@ if st.button("スコア計算実行"):
         group: [0.125, 0.1, 0.075, 0.05, 0.04, 0.02, 0.01][idx]
         for idx, (group, _) in enumerate(sorted_lines)
         if idx < 9
-    }return bonus_map
+    }
+
+    return bonus_map
+
+def get_group_bonus(car_no, line_def, group_bonus_map):
+    for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+        if car_no in line_def[group]:
+            base_bonus = group_bonus_map.get(group, 0.0)
+            s_bonus = 0.15 if group == 'A' else 0.0
+            return base_bonus + s_bonus
+    if '単騎' in line_def and car_no in line_def['単騎']:
+        return 0.2
+    return 0.0
+
 
 def get_group_bonus(car_no, line_def, group_bonus_map):
     for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
