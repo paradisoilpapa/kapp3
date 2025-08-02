@@ -284,22 +284,23 @@ if st.button("スコア計算実行"):
 
 
 
-    def wind_straight_combo_adjust(kaku, direction, speed, straight, pos):
-        if direction == "無風" or speed < 0.5:
-            return 0
+# --- 【修正ポイント1：風補正値を上限±0.05の足し算方式に変更（kakushitsu基準統一）】 ---
+    def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_length, line_order):
+        wind_adj = wind_coefficients.get(wind_direction, 0.0)
+        pos_multi = position_multipliers.get(line_order, 0.3)
+
+        if wind_direction == "無風" or wind_speed == 0:
+            return 0.0
     
-        base = wind_coefficients.get(direction, 0.0)  # e.g. 上=+0.005
-        pos_mult = position_multipliers.get(pos, 0.0)  # e.g. 先頭=0.5, 番手=0.3
+        coeff = {
+            '逃': 1.0,
+            '両': 0.7,
+            '追': 0.4
+        }.get(kakushitsu, 0.5)
     
-        # 強化された脚質補正係数（±1.0スケールに）
-        kaku_coeff = {
-            '逃': +0.3,
-            '両':  +0.15,
-            '追': -0.3
-        }.get(kaku, 0.0)
-    
-        total = base * speed * pos_mult * kaku_coeff  # 例: +0.1×10×1×1 = +1.0
-        return round(total, 2)
+        total = wind_speed * wind_adj * coeff * pos_multi
+        total = max(min(total, 0.05), -0.05)
+        return round(total, 3)
 
 
     def convert_chaku_to_score(values):
@@ -331,34 +332,40 @@ if st.button("スコア計算実行"):
             '両': 0.0
         }.get(kaku, 0.0)
 
-    def line_member_bonus(pos):
+# --- 【修正ポイント3：ライン位置補正を0.03〜0.05の段階制に調整】 ---
+    def line_member_bonus(line_order):
         return {
-            0: 0.25,  # 単騎
-            1: 0.25,  # 先頭（ライン1番手）
-            2: 0.25,  # 2番手（番手）
-            3: 0.25,  # 3番手（最後尾）
-            4: 0.25   # 4番手（9車用：評価不要レベル）
-        }.get(pos, 0.0)
+            0: 0.03,  # 単騎
+            1: 0.05,  # 先頭
+            2: 0.04,  # 番手
+            3: 0.03   # 3番手
+        }.get(line_order, 0.0)
 
 
-    def bank_character_bonus(kaku, angle, straight):
-        """
-        カント角と直線長による脚質補正（スケール緩和済み）
-        """
-        straight_factor = (straight - 40.0) / 10.0
-        angle_factor = (angle - 25.0) / 5.0
+# --- 【修正ポイント4：バンク・周長補正に±0.05制限を追加（kakushitsu統一）】 ---
+    def bank_character_bonus(kakushitsu, bank_angle, straight_length):
+        straight_factor = (straight_length - 40.0) / 10.0
+        angle_factor = (bank_angle - 25.0) / 5.0
         total_factor = -0.1 * straight_factor + 0.1 * angle_factor
-        return round({'逃': +total_factor, '追': -total_factor, '両': +0.25 * total_factor}.get(kaku, 0.0), 2)
-        
-    def bank_length_adjust(kaku, length):
-        """
-        バンク周長による補正（400基準を完全維持しつつ、±0.15に制限）
-        """
-        delta = (length - 411) / 100
+        total_factor = max(min(total_factor, 0.05), -0.05)
+        return round({
+            '逃': +total_factor,
+            '追': -total_factor,
+            '両': +0.25 * total_factor
+        }.get(kakushitsu, 0.0), 2)
+    
+    def bank_length_adjust(kakushitsu, bank_length):
+        delta = (bank_length - 411) / 100
         delta = max(min(delta, 0.075), -0.075)
-        return round({'逃': 1.0 * delta, '両': 2.0 * delta, '追': 3.0 * delta}.get(kaku, 0.0), 2)
+        delta = max(min(delta, 0.05), -0.05)  # 強制制限
+        return round({
+            '逃': 1.0 * delta,
+            '両': 2.0 * delta,
+            '追': 3.0 * delta
+        }.get(kakushitsu, 0.0), 2)
 
-def compute_group_bonus(score_parts, line_def):
+
+    def compute_group_bonus(score_parts, line_def):
     group_scores = {k: 0.0 for k in line_def.keys()}
     group_counts = {k: 0 for k in line_def.keys()}
 
@@ -488,8 +495,8 @@ for i in range(7):
     kasai = convert_chaku_to_score(chaku_values) or 0.0
     rating_score = tenscore_score[i]
     rain_corr = lap_adjust(kaku, laps)
-    s_bonus = 0.025 * st.session_state.get(f"s_point_{num}", 0)
-    b_bonus = 0.025 * st.session_state.get(f"b_point_{num}", 0)
+    s_bonus = min(0.01 * st.session_state.get(f"s_point_{num}", 0), 0.03)
+    b_bonus = min(0.01 * st.session_state.get(f"b_point_{num}", 0), 0.03)
     symbol_score = s_bonus + b_bonus
     line_bonus = line_member_bonus(line_order[i])
     bank_bonus = bank_character_bonus(kaku, bank_angle, straight_length)
