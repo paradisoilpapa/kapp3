@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-
 # --- 補助関数定義 ---
 def convert_chaku_to_score(values):
     scores = []
@@ -34,7 +33,7 @@ def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_
     }.get(kakushitsu, 0.5)
 
     total = wind_speed * wind_adj * coeff * pos_multi
-    total = max(min(total, 0.05), -0.05)
+    total = max(min(total, 0.10), -0.10)
     return round(total, 3)
 
 def lap_adjust(kaku, laps):
@@ -47,17 +46,17 @@ def lap_adjust(kaku, laps):
 
 def line_member_bonus(line_order):
     return {
-        0: 0.03,
-        1: 0.05,
-        2: 0.04,
-        3: 0.03
+        0: 0.05,
+        1: 0.08,
+        2: 0.06,
+        3: 0.05
     }.get(line_order, 0.0)
 
 def bank_character_bonus(kakushitsu, bank_angle, straight_length):
     straight_factor = (straight_length - 40.0) / 10.0
     angle_factor = (bank_angle - 25.0) / 5.0
     total_factor = -0.1 * straight_factor + 0.1 * angle_factor
-    total_factor = max(min(total_factor, 0.05), -0.05)
+    total_factor = max(min(total_factor, 0.10), -0.10)
     return round({
         '逃': +total_factor,
         '追': -total_factor,
@@ -66,8 +65,7 @@ def bank_character_bonus(kakushitsu, bank_angle, straight_length):
 
 def bank_length_adjust(kakushitsu, bank_length):
     delta = (bank_length - 411) / 100
-    delta = max(min(delta, 0.075), -0.075)
-    delta = max(min(delta, 0.05), -0.05)
+    delta = max(min(delta, 0.10), -0.10)
     return round({
         '逃': 1.0 * delta,
         '両': 2.0 * delta,
@@ -110,6 +108,12 @@ def get_group_bonus(car_no, line_def, bonus_map):
         if car_no in members:
             return bonus_map.get(group, 0.0)
     return 0.0
+
+# --- S・B補正（上限0.05に強化） ---
+def sb_bonus(s_point, b_point):
+    s_bonus = min(0.01 * s_point, 0.05)
+    b_bonus = min(0.01 * b_point, 0.05)
+    return s_bonus + b_bonus
 
 # --- ここまでが関数定義部分。以下、UI構成とスコア計算ロジックを続けて記載 ---
 
@@ -627,8 +631,8 @@ for i in range(7):
     kasai = convert_chaku_to_score(chaku_values) or 0.0
     rating_score = tenscore_score[i]
     rain_corr = lap_adjust(kaku, laps)
-    s_bonus = min(0.01 * st.session_state.get(f"s_point_{num}", 0), 0.03)
-    b_bonus = min(0.01 * st.session_state.get(f"b_point_{num}", 0), 0.03)
+    s_bonus = min(0.01 * st.session_state.get(f"s_point_{num}", 0), 0.05)
+    b_bonus = min(0.01 * st.session_state.get(f"b_point_{num}", 0), 0.05)
     symbol_score = s_bonus + b_bonus
     line_bonus = line_member_bonus(line_order[i])
     bank_bonus = bank_character_bonus(kaku, bank_angle, straight_length)
