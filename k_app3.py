@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
     def convert_chaku_to_score(values):
-        scores = []
+       scores = []
         for i, v in enumerate(values):
             v = v.strip()
             try:
