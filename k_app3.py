@@ -383,9 +383,9 @@ if st.button("スコア計算実行"):
 
     # 順位に応じてボーナス値を割当
     def compute_group_bonus(score_parts, line_def):
-    group_scores = {k: 0.0 for k in line_def.keys()}
-    group_counts = {k: 0 for k in line_def.keys()}
-
+        group_scores = {k: 0.0 for k in line_def.keys()}
+        group_counts = {k: 0 for k in line_def.keys()}
+    
     # 各ラインの合計スコアと人数を集計
     for entry in score_parts:
         car_no, score = entry[0], entry[-1]
