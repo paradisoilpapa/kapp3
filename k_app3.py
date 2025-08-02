@@ -407,6 +407,17 @@ if st.button("スコア計算実行"):
 
     return bonus_map
 
+def get_group_bonus(car_no, line_def, group_bonus_map):
+    for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+        if car_no in line_def[group]:
+            base_bonus = group_bonus_map.get(group, 0.0)
+            s_bonus = 0.15 if group == 'A' else 0.0
+            return base_bonus + s_bonus
+    if '単騎' in line_def and car_no in line_def['単騎']:
+        return 0.2
+    return 0.0
+
+
 
 
 
