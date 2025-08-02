@@ -1,23 +1,117 @@
 import streamlit as st
 import pandas as pd
 
-    def convert_chaku_to_score(values):
-       scores = []
-        for i, v in enumerate(values):
-            v = v.strip()
-            try:
-                chaku = int(v)
-                if 1 <= chaku <= 9:
-                    score = (10 - chaku) / 9
-                    if i == 1:
-                        score *= 0.35
-                    scores.append(score)
-            except ValueError:
-                continue
-        if not scores:
-            return 0.0
-        return round(sum(scores) / len(scores), 2)
 
+# --- 補助関数定義 ---
+def convert_chaku_to_score(values):
+    scores = []
+    for i, v in enumerate(values):
+        v = v.strip()
+        try:
+            chaku = int(v)
+            if 1 <= chaku <= 9:
+                score = (10 - chaku) / 9
+                if i == 1:
+                    score *= 0.35
+                scores.append(score)
+        except ValueError:
+            continue
+    if not scores:
+        return 0.0
+    return round(sum(scores) / len(scores), 2)
+
+def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_length, line_order):
+    wind_adj = wind_coefficients.get(wind_direction, 0.0)
+    pos_multi = position_multipliers.get(line_order, 0.3)
+
+    if wind_direction == "無風" or wind_speed == 0:
+        return 0.0
+
+    coeff = {
+        '逃': 1.0,
+        '両': 0.7,
+        '追': 0.4
+    }.get(kakushitsu, 0.5)
+
+    total = wind_speed * wind_adj * coeff * pos_multi
+    total = max(min(total, 0.05), -0.05)
+    return round(total, 3)
+
+def lap_adjust(kaku, laps):
+    delta = max(laps - 2, 0)
+    return {
+        '逃': round(-0.1 * delta, 1),
+        '追': round(+0.05 * delta, 1),
+        '両': 0.0
+    }.get(kaku, 0.0)
+
+def line_member_bonus(line_order):
+    return {
+        0: 0.03,
+        1: 0.05,
+        2: 0.04,
+        3: 0.03
+    }.get(line_order, 0.0)
+
+def bank_character_bonus(kakushitsu, bank_angle, straight_length):
+    straight_factor = (straight_length - 40.0) / 10.0
+    angle_factor = (bank_angle - 25.0) / 5.0
+    total_factor = -0.1 * straight_factor + 0.1 * angle_factor
+    total_factor = max(min(total_factor, 0.05), -0.05)
+    return round({
+        '逃': +total_factor,
+        '追': -total_factor,
+        '両': +0.25 * total_factor
+    }.get(kakushitsu, 0.0), 2)
+
+def bank_length_adjust(kakushitsu, bank_length):
+    delta = (bank_length - 411) / 100
+    delta = max(min(delta, 0.075), -0.075)
+    delta = max(min(delta, 0.05), -0.05)
+    return round({
+        '逃': 1.0 * delta,
+        '両': 2.0 * delta,
+        '追': 3.0 * delta
+    }.get(kakushitsu, 0.0), 2)
+
+def score_from_tenscore_list(tenscore_list):
+    df = pd.DataFrame({"得点": tenscore_list})
+    df["順位"] = df["得点"].rank(ascending=False, method="min").astype(int)
+    baseline = df[df["順位"].between(2, 8)]["得点"].mean()
+    def apply_targeted_correction(row):
+        if row["順位"] in [2, 3, 4]:
+            correction = abs(baseline - row["得点"]) * 0.03
+            return round(correction, 3)
+        else:
+            return 0.0
+    df["最終補正値"] = df.apply(apply_targeted_correction, axis=1)
+    return df["最終補正値"].tolist()
+
+def compute_group_bonus(score_parts, line_def):
+    group_scores = {k: 0.0 for k in line_def.keys()}
+    group_counts = {k: 0 for k in line_def.keys()}
+    for entry in score_parts:
+        car_no, score = entry[0], entry[-1]
+        for group in line_def:
+            if car_no in line_def[group]:
+                group_scores[group] += score
+                group_counts[group] += 1
+                break
+    sorted_lines = sorted(group_scores.items(), key=lambda x: x[1], reverse=True)
+    bonus_values = [0.125, 0.1, 0.075, 0.05, 0.04, 0.02, 0.01]
+    bonus_map = {
+        group: bonus_values[idx] if idx < len(bonus_values) else 0.0
+        for idx, (group, _) in enumerate(sorted_lines)
+    }
+    return bonus_map
+
+def get_group_bonus(car_no, line_def, bonus_map):
+    for group, members in line_def.items():
+        if car_no in members:
+            return bonus_map.get(group, 0.0)
+    return 0.0
+
+# --- ここまでが関数定義部分。以下、UI構成とスコア計算ロジックを続けて記載 ---
 
 
 
