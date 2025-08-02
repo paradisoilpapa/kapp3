@@ -1,6 +1,27 @@
 import streamlit as st
 import pandas as pd
 
+    def convert_chaku_to_score(values):
+        scores = []
+        for i, v in enumerate(values):
+            v = v.strip()
+            try:
+                chaku = int(v)
+                if 1 <= chaku <= 9:
+                    score = (10 - chaku) / 9
+                    if i == 1:
+                        score *= 0.35
+                    scores.append(score)
+            except ValueError:
+                continue
+        if not scores:
+            return 0.0
+        return round(sum(scores) / len(scores), 2)
+
+
+
+
+
 # --- ページ設定 ---
 st.set_page_config(page_title="ライン競輪スコア計算（完全統一版）", layout="wide")
 
@@ -301,25 +322,6 @@ if st.button("スコア計算実行"):
         total = wind_speed * wind_adj * coeff * pos_multi
         total = max(min(total, 0.05), -0.05)
         return round(total, 3)
-
-
-    def convert_chaku_to_score(values):
-        scores = []
-        for i, v in enumerate(values):
-            v = v.strip()
-            try:
-                chaku = int(v)
-                if 1 <= chaku <= 9:
-                    score = (10 - chaku) / 9
-                    if i == 1:
-                        score *= 0.35
-                    scores.append(score)
-            except ValueError:
-                continue
-        if not scores:
-            return 0.0
-        return round(sum(scores) / len(scores), 2)
-
 
 
 
