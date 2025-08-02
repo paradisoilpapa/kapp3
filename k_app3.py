@@ -404,7 +404,6 @@ if st.button("スコア計算実行"):
         for idx, (group, _) in enumerate(sorted_lines)
         if idx < 9
     }
-
     return bonus_map
 
 def get_group_bonus(car_no, line_def, group_bonus_map):
