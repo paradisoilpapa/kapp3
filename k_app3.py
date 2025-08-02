@@ -416,7 +416,7 @@ def get_group_bonus(car_no, line_def, group_bonus_map):
     if '単騎' in line_def and car_no in line_def['単騎']:
         return 0.2
     return 0.0
-``
+
 
 
 def get_group_bonus(car_no, line_def, group_bonus_map):
