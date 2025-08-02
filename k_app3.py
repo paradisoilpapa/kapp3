@@ -403,8 +403,7 @@ if st.button("スコア計算実行"):
         group: [0.125, 0.1, 0.075, 0.05, 0.04, 0.02, 0.01][idx]
         for idx, (group, _) in enumerate(sorted_lines)
         if idx < 9
-    }
-return bonus_map
+    }return bonus_map
 
 def get_group_bonus(car_no, line_def, group_bonus_map):
     for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
