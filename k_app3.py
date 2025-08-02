@@ -365,10 +365,10 @@ if st.button("スコア計算実行"):
         }.get(kakushitsu, 0.0), 2)
 
 
-    def compute_group_bonus(score_parts, line_def):
-        group_scores = {k: 0.0 for k in line_def.keys()}
-        group_counts = {k: 0 for k in line_def.keys()}
-        
+def compute_group_bonus(score_parts, line_def):
+    group_scores = {k: 0.0 for k in line_def.keys()}
+    group_counts = {k: 0 for k in line_def.keys()}
+
     # 各ラインの合計スコアと人数を集計
     for entry in score_parts:
         car_no, score = entry[0], entry[-1]
@@ -389,6 +389,7 @@ if st.button("スコア計算実行"):
     }
 
     return bonus_map
+
 
 def get_group_bonus(car_no, line_def, group_bonus_map):
     for group in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
