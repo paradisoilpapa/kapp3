@@ -65,12 +65,8 @@ def bank_character_bonus(kakushitsu, bank_angle, straight_length):
 
 def bank_length_adjust(kakushitsu, bank_length):
     delta = (bank_length - 411) / 100
-    delta = max(min(delta, 0.005), -0.005)
-    return round({
-        '逃': 1.0 * delta,
-        '両': 2.0 * delta,
-        '追': 3.0 * delta
-    }.get(kakushitsu, 0.0), 2)
+    delta = max(min(delta, 0.5), -0.5)
+    return round(delta, 3)
 
 def score_from_tenscore_list(tenscore_list):
     df = pd.DataFrame({"得点": tenscore_list})
@@ -114,6 +110,7 @@ def bonus(s_point, b_point):
     s_bonus = min(0.1 * s_point, 0.5)
     b_bonus = min(0.1 * b_point, 0.5)
     return s_bonus + b_bonus
+
 
 
 
