@@ -32,8 +32,8 @@ def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_
         '追': 0.4
     }.get(kakushitsu, 0.5)
 
-    total = wind_speed * wind_adj * coeff * pos_multi
-    total = max(min(total, 1.0), -1.0)  # 10倍化
+    total = wind_speed * wind_adj * coeff * pos_multi * 10
+    total = max(min(total, 0.5), -0.5)
     return round(total, 3)
 
 def lap_adjust(kaku, laps):
@@ -56,7 +56,7 @@ def bank_character_bonus(kakushitsu, bank_angle, straight_length):
     straight_factor = (straight_length - 40.0) / 10.0
     angle_factor = (bank_angle - 25.0) / 5.0
     total_factor = -0.1 * straight_factor + 0.1 * angle_factor
-    total_factor = max(min(total_factor, 1.0), -1.0)  # 10倍化
+    total_factor = max(min(total_factor, 0.5), -0.5)
     return round({
         '逃': +total_factor,
         '追': -total_factor,
@@ -65,7 +65,7 @@ def bank_character_bonus(kakushitsu, bank_angle, straight_length):
 
 def bank_length_adjust(kakushitsu, bank_length):
     delta = (bank_length - 411) / 100
-    delta = max(min(delta, 0.01), -0.01)  # 1/10に弱体化
+    delta = max(min(delta, 0.005), -0.005)
     return round({
         '逃': 1.0 * delta,
         '両': 2.0 * delta,
@@ -111,13 +111,9 @@ def get_group_bonus(car_no, line_def, bonus_map):
 
 # --- S・B補正（上限0.5に強化） ---
 def bonus(s_point, b_point):
-    s_bonus = min(0.1 * s_point, 0.5)  # 10倍化
-    b_bonus = min(0.1 * b_point, 0.5)  # 10倍化
+    s_bonus = min(0.1 * s_point, 0.5)
+    b_bonus = min(0.1 * b_point, 0.5)
     return s_bonus + b_bonus
-
-# --- ▼スコア計算実行時に呼ぶ部分 ---
-# symbol_score = bonus(st.session_state.get(f"s_point_{num}", 0), st.session_state.get(f"b_point_{num}", 0))
-# でそのまま呼び出し可能
 
 
 
