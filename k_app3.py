@@ -38,30 +38,33 @@ def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_
 
 def lap_adjust(kaku, laps):
     delta = max(laps - 2, 0)
-    return {
-        '逃': round(-0.1 * delta, 1),
-        '追': round(+0.05 * delta, 1),
+    delta_value = {
+        '逃': -0.1 * delta,
+        '追': +0.05 * delta,
         '両': 0.0
     }.get(kaku, 0.0)
+    return max(min(delta_value, 0.5), -0.5)
 
 def line_member_bonus(line_order):
-    return {
-        0: 0.05,
-        1: 0.08,
-        2: 0.06,
-        3: 0.05
+    bonus_value = {
+        0: 0.10,
+        1: 0.25,
+        2: 0.15,
+        3: 0.10
     }.get(line_order, 0.0)
+    return max(min(bonus_value, 0.5), -0.5)
 
 def bank_character_bonus(kakushitsu, bank_angle, straight_length):
     straight_factor = (straight_length - 40.0) / 10.0
     angle_factor = (bank_angle - 25.0) / 5.0
     total_factor = -0.1 * straight_factor + 0.1 * angle_factor
     total_factor = max(min(total_factor, 0.5), -0.5)
-    return round({
+    bonus_value = {
         '逃': +total_factor,
         '追': -total_factor,
         '両': +0.25 * total_factor
-    }.get(kakushitsu, 0.0), 2)
+    }.get(kakushitsu, 0.0)
+    return max(min(bonus_value, 0.5), -0.5)
 
 def bank_length_adjust(kakushitsu, bank_length):
     delta = (bank_length - 411) / 100
@@ -110,6 +113,7 @@ def bonus(s_point, b_point):
     s_bonus = min(0.1 * s_point, 0.5)
     b_bonus = min(0.1 * b_point, 0.5)
     return s_bonus + b_bonus
+
 
 
 
