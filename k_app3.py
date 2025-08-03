@@ -27,9 +27,9 @@ def wind_straight_combo_adjust(kakushitsu, wind_direction, wind_speed, straight_
         return 0.0
 
     coeff = {
-        '逃': 1.0,
-        '両': 0.7,
-        '追': 0.4
+        '逃': 1.577,
+        '両': 1.628,
+        '追': 1.796
     }.get(kakushitsu, 0.5)
 
     total = wind_speed * wind_adj * coeff * pos_multi * 10
@@ -69,7 +69,15 @@ def bank_character_bonus(kakushitsu, bank_angle, straight_length):
 def bank_length_adjust(kakushitsu, bank_length):
     delta = (bank_length - 411) / 100
     delta = max(min(delta, 0.5), -0.5)
-    return round(delta, 3)
+    coeff = {
+        '逃': 1.577,
+        '両': 1.628,
+        '追': 1.796
+    }.get(kakushitsu, 1.0)
+    total = delta * coeff
+    total = max(min(total, 0.5), -0.5)
+    return round(total, 3)
+
 
 def score_from_tenscore_list(tenscore_list):
     df = pd.DataFrame({"得点": tenscore_list})
