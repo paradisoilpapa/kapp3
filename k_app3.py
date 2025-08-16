@@ -1,102 +1,129 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import date
 from pathlib import Path
 
-st.set_page_config(page_title="競輪ログ（二車複＋ワイド）", layout="centered")
+# =========================
+# 基本設定
+# =========================
+st.set_page_config(page_title="競輪ログ（手入力専用：二車複＋ワイド）", layout="centered")
 CSV_PATH = Path("keirin_logs.csv")
+COLUMNS = ["日付", "場", "R", "券種", "買い目", "投資", "払戻", "オッズ", "的中"]
 
-DEFAULT_COLUMNS = ["日付","場","R","券種","買い目","投資","払戻","オッズ","的中"]
-if CSV_PATH.exists():
-    df = pd.read_csv(CSV_PATH, dtype=str)
-    # 型整形
-    for c in ["投資","払戻"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
-    for c in ["オッズ"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    if "的中" not in df.columns:
-        df["的中"] = (df["払戻"] > 0).astype(int)
-else:
-    df = pd.DataFrame(columns=DEFAULT_COLUMNS)
+# =========================
+# データ読み込み（型を厳密に整形）
+# =========================
+def load_df() -> pd.DataFrame:
+    if CSV_PATH.exists():
+        df = pd.read_csv(CSV_PATH, dtype=str)  # まず文字列で読み込む
+    else:
+        df = pd.DataFrame(columns=COLUMNS, dtype=object)
 
-st.title("競輪ログ（事前購入 × 二車複＋ワイド）")
+    # 欠損列を補完
+    for c in COLUMNS:
+        if c not in df.columns:
+            df[c] = ""
 
-with st.sidebar:
-    st.markdown("### 入力ヘルパー")
-    base_stake = st.number_input("固定投資(円/R) ※目安", 100, 10000, 300, 100)
-    st.caption("あなたは基本300円固定（二車複100×2＋ワイド100）。")
+    # 数値列を安全に数値化
+    df["投資"] = pd.to_numeric(df["投資"], errors="coerce").fillna(0).astype("int64")
+    df["払戻"] = pd.to_numeric(df["払戻"], errors="coerce").fillna(0).astype("int64")
+    df["オッズ"] = pd.to_numeric(df["オッズ"], errors="coerce")
 
-st.markdown("#### 1) CSV貼り付け or 手入力で追加")
+    # 的中列：払戻>0 を1、それ以外0
+    df["的中"] = pd.to_numeric(df["的中"], errors="coerce").fillna(0).astype("int64")
+    df["的中"] = np.where(df["払戻"] > 0, 1, df["的中"])
 
-with st.expander("CSV貼り付け（推奨）", expanded=True):
-    st.caption("形式：日付,場,R,券種,買い目,投資,払戻,オッズ 例) 2025-08-16,岸和田,4,二車複,1-7,200,0,8.9")
-    csv_line = st.text_input("1行CSVを貼り付け", value="")
-    if st.button("CSVを追加"):
-        try:
-            parts = [x.strip() for x in csv_line.split(",")]
-            assert len(parts) >= 6, "項目数が足りません。"
-            row = {
-                "日付": parts[0],
-                "場": parts[1],
-                "R": parts[2],
-                "券種": parts[3],
-                "買い目": parts[4],
-                "投資": int(parts[5]),
-                "払戻": int(parts[6]) if len(parts) > 6 and parts[6] else 0,
-                "オッズ": float(parts[7]) if len(parts) > 7 and parts[7] else None,
-            }
-            row["的中"] = 1 if row["払戻"] > 0 else 0
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            df.to_csv(CSV_PATH, index=False)
-            st.success("追加しました。")
-        except Exception as e:
-            st.error(f"追加失敗：{e}")
+    # 文字列列を整える（余計な空白など）
+    for c in ["日付", "場", "R", "券種", "買い目"]:
+        df[c] = df[c].astype(str).str.strip()
 
-with st.expander("手入力で追加", expanded=False):
-    col1, col2 = st.columns(2)
+    # 列順を揃える
+    df = df[COLUMNS].copy()
+    return df
+
+def save_df(df: pd.DataFrame) -> None:
+    # 保存前にもう一度安全整形
+    out = df.copy()
+    out["投資"] = pd.to_numeric(out["投資"], errors="coerce").fillna(0).astype("int64")
+    out["払戻"] = pd.to_numeric(out["払戻"], errors="coerce").fillna(0).astype("int64")
+    out["オッズ"] = pd.to_numeric(out["オッズ"], errors="coerce")
+    out["的中"] = pd.to_numeric(out["的中"], errors="coerce").fillna(0).astype("int64")
+    out.to_csv(CSV_PATH, index=False)
+
+df = load_df()
+
+st.title("競輪ログ（手入力専用：二車複＋ワイド）")
+
+# =========================
+# 入力フォーム（手入力のみ）
+# =========================
+with st.form("manual_input_form", clear_on_submit=True):
+    st.subheader("1) レースを追加（手入力）")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        d = st.date_input("日付", value=date.today())
-        place = st.text_input("場", value="")
-        rno = st.text_input("R（数字のみ）", value="")
+        in_date = st.date_input("日付", value=date.today())
+        in_place = st.text_input("場", value="", placeholder="例：岸和田")
+        in_r = st.text_input("R（数字）", value="", placeholder="例：4")
     with col2:
-        kind = st.selectbox("券種", ["二車複","ワイド","三連複"])
-        comb = st.text_input("買い目（例 1-7 / 1-7-2）", value="")
-        stake = st.number_input("投資(円)", 0, 10000, 300 if kind=="三連複" else (200 if kind=="二車複" else 100), 100)
-    col3, col4 = st.columns(2)
+        in_kind = st.selectbox("券種", ["二車複", "ワイド", "三連複"], index=0)
+        in_comb = st.text_input("買い目", value="", placeholder="例：1-7 / 1-6 / 1-7-2")
+        # あなたの運用既定：二車複=各100×2, ワイド=100, 例外運用あり
+        default_stake = 200 if in_kind == "二車複" else (100 if in_kind == "ワイド" else 300)
+        in_stake = st.number_input("投資(円)", min_value=0, max_value=1_000_000, value=default_stake, step=100)
     with col3:
-        payoff = st.number_input("払戻(円)", 0, 1000000, 0, 100)
-    with col4:
-        odds = st.text_input("オッズ（任意）", value="")
-    if st.button("手入力を追加"):
+        in_pay = st.number_input("払戻(円)", min_value=0, max_value=10_000_000, value=0, step=100)
+        in_odds = st.text_input("オッズ（任意）", value="", placeholder="例：8.9")
+
+    submitted = st.form_submit_button("追加")
+    if submitted:
         try:
-            row = {
-                "日付": str(d),
-                "場": place.strip(),
-                "R": rno.strip(),
-                "券種": kind,
-                "買い目": comb.strip(),
-                "投資": int(stake),
-                "払戻": int(payoff),
-                "オッズ": float(odds) if odds else None,
-            }
-            row["的中"] = 1 if row["払戻"] > 0 else 0
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            df.to_csv(CSV_PATH, index=False)
-            st.success("追加しました。")
+            # バリデーション
+            if not in_place.strip():
+                st.error("「場」を入力してください。")
+            elif not in_r.strip().isdigit():
+                st.error("「R」は数字で入力してください。")
+            elif not in_comb.strip():
+                st.error("「買い目」を入力してください。")
+            else:
+                # 1行生成
+                row = {
+                    "日付": str(in_date),
+                    "場": in_place.strip(),
+                    "R": in_r.strip(),
+                    "券種": in_kind,
+                    "買い目": in_comb.strip(),
+                    "投資": int(in_stake),
+                    "払戻": int(in_pay),
+                    "オッズ": (float(in_odds) if in_odds.strip() != "" else np.nan),
+                    "的中": 1 if int(in_pay) > 0 else 0,
+                }
+                # 追記
+                df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+                save_df(df)
+                st.success("追加しました。")
         except Exception as e:
-            st.error(f"追加失敗：{e}")
+            st.error(f"追加に失敗しました：{e}")
 
-st.markdown("#### 2) 集計")
-
-if len(df)==0:
-    st.info("まだデータがありません。上でレースを追加してください。")
+# =========================
+# 集計（安全に数値化してから計算）
+# =========================
+if len(df) == 0:
+    st.info("まだデータがありません。上のフォームから追加してください。")
 else:
-    # 総計
+    # 再度保険として数値化（環境差での型崩れ対策）
+    df["投資"] = pd.to_numeric(df["投資"], errors="coerce").fillna(0).astype("int64")
+    df["払戻"] = pd.to_numeric(df["払戻"], errors="coerce").fillna(0).astype("int64")
+    df["オッズ"] = pd.to_numeric(df["オッズ"], errors="coerce")
+    df["的中"] = pd.to_numeric(df["的中"], errors="coerce").fillna(0).astype("int64")
+
+    # --- メトリクス ---
     total_bet = int(df["投資"].sum())
     total_ret = int(df["払戻"].sum())
-    roi = (total_ret/total_bet)*100 if total_bet>0 else 0.0
     hits = int(df["的中"].sum())
-    trials = len(df)
+    trials = int(len(df))
+    roi = (total_ret / total_bet * 100.0) if total_bet > 0 else 0.0
 
     colA, colB, colC, colD = st.columns(4)
     colA.metric("累計 投資", f"{total_bet:,} 円")
@@ -104,29 +131,61 @@ else:
     colC.metric("累計 回収率", f"{roi:.2f} %")
     colD.metric("的中数 / レース", f"{hits}/{trials}")
 
-    # 券種別
-    by_kind = df.groupby("券種").agg(投資=("投資","sum"), 払戻=("払戻","sum"), 的中=("的中","sum"), 本数=("買い目","count")).reset_index()
-    by_kind["回収率%"] = (by_kind["払戻"]/by_kind["投資"]*100).round(2)
-    st.subheader("券種別集計")
+    # --- 券種別集計 ---
+    st.subheader("2) 券種別集計")
+    by_kind = df.groupby("券種", dropna=False).agg(
+        投資=("投資", "sum"),
+        払戻=("払戻", "sum"),
+        的中=("的中", "sum"),
+        本数=("買い目", "count"),
+    ).reset_index()
+
+    by_kind["投資"] = pd.to_numeric(by_kind["投資"], errors="coerce").fillna(0)
+    by_kind["払戻"] = pd.to_numeric(by_kind["払戻"], errors="coerce").fillna(0)
+
+    by_kind["回収率%"] = np.where(
+        by_kind["投資"] > 0,
+        (by_kind["払戻"] / by_kind["投資"] * 100).round(2),
+        0.0,
+    )
     st.dataframe(by_kind, use_container_width=True)
 
-    # 当日/期間フィルタ
-    with st.expander("期間・フィルタ"):
+    # --- フィルタ＆明細 ---
+    st.subheader("3) 明細（期間・券種でフィルタ）")
+    with st.expander("フィルタ"):
         colx, coly, colz = st.columns(3)
         with colx:
             date_from = st.text_input("日付From（YYYY-MM-DD）", "")
         with coly:
             date_to = st.text_input("日付To（YYYY-MM-DD）", "")
         with colz:
-            kind_sel = st.multiselect("券種フィルタ", ["二車複","ワイド","三連複"], default=["二車複","ワイド"])
-        q = df.copy()
-        if date_from:
-            q = q[q["日付"] >= date_from]
-        if date_to:
-            q = q[q["日付"] <= date_to]
-        if kind_sel:
-            q = q[q["券種"].isin(kind_sel)]
-        q["行回収率%"] = (q["払戻"]/q["投資"]*100).round(2)
-        st.dataframe(q.sort_values(["日付","場","R"]), use_container_width=True)
+            kinds = st.multiselect("券種フィルタ", ["二車複", "ワイド", "三連複"], default=["二車複", "ワイド"])
 
-    st.caption("※ CSVはアプリと同じフォルダの keirin_logs.csv に保存されます。バックアップ推奨。")
+    q = df.copy()
+    if date_from.strip():
+        q = q[q["日付"] >= date_from.strip()]
+    if date_to.strip():
+        q = q[q["日付"] <= date_to.strip()]
+    if kinds:
+        q = q[q["券種"].isin(kinds)]
+
+    # 行ごとの回収率（0除算回避）
+    q["行回収率%"] = np.where(
+        pd.to_numeric(q["投資"], errors="coerce").fillna(0) > 0,
+        (pd.to_numeric(q["払戻"], errors="coerce").fillna(0) / pd.to_numeric(q["投資"], errors="coerce").fillna(1) * 100).round(2),
+        0.0
+    )
+
+    q = q.sort_values(["日付", "場", "R"], ascending=[True, True, True]).reset_index(drop=True)
+    st.dataframe(q, use_container_width=True)
+
+    # --- ダウンロード（バックアップ用） ---
+    st.download_button(
+        label="CSVをダウンロード（バックアップ）",
+        data=q.to_csv(index=False).encode("utf-8"),
+        file_name="keirin_logs_export.csv",
+        mime="text/csv",
+    )
+
+st.caption("※ 手入力専用版。CSV貼付や自動取得の機能は入れていません。数値型は常に安全変換し、0除算や型エラーで落ちないように実装しています。")
+
