@@ -247,6 +247,10 @@ else:
     # =========================
     st.subheader("3.5) 会場別 × 券種 集計")
     base = q.copy()
+    # 場・券種の空白などを正規化しておくと割れにくい
+    base["場"] = base["場"].astype(str).str.strip().replace({"": "不明"})
+    base["券種"] = base["券種"].astype(str).str.strip()
+
     base["投資"] = _safe_numeric(base["投資"], "int")
     base["払戻"] = _safe_numeric(base["払戻"], "int")
     base["的中"] = _safe_numeric(base["的中"], "int")
@@ -277,15 +281,26 @@ else:
             values=["投資","払戻","回収率%","的中率%"],
             aggfunc="first"
         ).fillna(0)
+
+        # ★ MergeError対策：インデックス→列化 & 型揃え
+        pv = pv.reset_index()
+        pv["場"] = pv["場"].astype(str)
+
         tot_place = base.groupby("場", dropna=False).agg(
             総投資=("投資","sum"), 総払戻=("払戻","sum")
         ).reset_index()
+        tot_place["場"] = tot_place["場"].astype(str)
         tot_place["総回収率%"] = np.where(
             tot_place["総投資"]>0,
             (tot_place["総払戻"]/tot_place["総投資"]*100).round(2),
             0.0
         )
-        pv = pv.merge(tot_place[["場","総投資","総払戻","総回収率%"]], on="場", how="left")
+
+        pv = pv.merge(
+            tot_place[["場","総投資","総払戻","総回収率%"]],
+            on="場", how="left"
+        ).fillna(0)
+
         pv = pv.sort_values("総回収率%", ascending=False)
         st.dataframe(pv, use_container_width=True)
 
@@ -294,7 +309,7 @@ else:
     # =========================
     st.subheader("4) 既存データの編集（直接書き換え → 保存）")
     edit_view = df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
-    # SelectboxColumn は環境で不安定なことがある → 使えれば使う
+    # SelectboxColumn は環境で不安定なことがあるため、使えなければ自動でフォールバック
     try:
         col_config = {
             "ID": st.column_config.NumberColumn("ID", help="永続ID（できるだけ編集しない）"),
@@ -358,4 +373,4 @@ else:
             df = df[~df["ID"].isin(del_ids)].copy()
             save_df(df)
             st.success(f"{len(del_ids)} 行を削除しました。")
-            st.rerun()  # ← 削除後に即再描画
+            st.rerun()  # 削除後に即再描画
