@@ -8,9 +8,25 @@ from pathlib import Path
 # =========================
 # 基本設定
 # =========================
-st.set_page_config(page_title="競輪ログ（手入力・編集・削除 完全版）", layout="centered")
+st.set_page_config(page_title="競輪ログ（手入力・編集・削除・会場プリセット）」, layout="centered")
 CSV_PATH = Path("keirin_logs.csv")
 COLUMNS = ["ID", "日付", "場", "R", "券種", "買い目", "投資", "払戻", "オッズ", "的中"]
+
+# 会場プリセット（50音順おおむね）
+VENUES = [
+    "いわき平", "京王閣", "取手", "宇都宮", "前橋", "西武園", "大宮",
+    "弥彦", "松戸", "千葉", "川崎", "平塚", "小田原",
+    "伊東温泉", "静岡", "名古屋", "岐阜", "大垣", "豊橋",
+    "四日市", "松阪", "奈良", "向日町（京都向日町）", "岸和田",
+    "和歌山", "玉野", "広島", "防府", "高松", "小松島",
+    "高知", "松山", "佐世保", "久留米", "小倉", "別府",
+    "熊本", "武雄", "青森", "函館", "小樽（休止）", "福井",
+    "富山", "前橋（重複注意）", "豊橋（重複注意）"
+]
+VENUES = sorted(set([v.replace("（重複注意）","") for v in VENUES]))
+
+# 券種プリセット
+BET_TYPES = ["二車複", "ワイド", "三連複", "二車単", "三連単"]
 
 # =========================
 # ユーティリティ
@@ -85,7 +101,7 @@ def get_date_bounds(df: pd.DataFrame):
 # データ読み込み
 # =========================
 df = load_df()
-st.title("競輪ログ（手入力・編集・削除 完全版）")
+st.title("競輪ログ（手入力・編集・削除・会場プリセット）")
 
 # =========================
 # 1) 手入力で追加
@@ -95,13 +111,23 @@ with st.form("manual_input_form", clear_on_submit=True):
     col1, col2, col3 = st.columns(3)
     with col1:
         in_date = st.date_input("日付", value=date.today())
-        in_place = st.text_input("場", value="", placeholder="例：岸和田")
+
+        venue_choice = st.selectbox("場（プリセット）", ["手入力に切替"] + VENUES, index=0)
+        if venue_choice == "手入力に切替":
+            in_place = st.text_input("場（自由入力）", value="", placeholder="例：岸和田")
+        else:
+            in_place = venue_choice
+
         in_r = st.text_input("R（数字）", value="", placeholder="例：4")
+
     with col2:
-        in_kind = st.selectbox("券種", ["二車複", "ワイド", "三連複"], index=0)
+        in_kind = st.selectbox("券種", BET_TYPES, index=0)
         in_comb = st.text_input("買い目", value="", placeholder="例：1-7 / 1-6 / 1-7-2")
-        default_stake = 200 if in_kind == "二車複" else (100 if in_kind == "ワイド" else 300)
+        # 既定額（編集可）：ワイド100、二車複200、二車単200、三連複300、三連単300
+        default_map = {"ワイド":100, "二車複":200, "二車単":200, "三連複":300, "三連単":300}
+        default_stake = default_map.get(in_kind, 100)
         in_stake = st.number_input("投資(円)", min_value=0, max_value=1_000_000, value=default_stake, step=100)
+
     with col3:
         in_pay = st.number_input("払戻(円)", min_value=0, max_value=10_000_000, value=0, step=100)
         in_odds = st.text_input("オッズ（任意）", value="", placeholder="例：8.9")
@@ -109,23 +135,23 @@ with st.form("manual_input_form", clear_on_submit=True):
     submitted = st.form_submit_button("追加")
     if submitted:
         try:
-            if not in_place.strip():
+            if not str(in_place).strip():
                 st.error("「場」を入力してください。")
-            elif not in_r.strip().isdigit():
+            elif not str(in_r).strip().isdigit():
                 st.error("「R」は数字で入力してください。")
-            elif not in_comb.strip():
+            elif not str(in_comb).strip():
                 st.error("「買い目」を入力してください。")
             else:
                 row = {
                     "ID": next_id(df),
                     "日付": str(in_date),
-                    "場": in_place.strip(),
-                    "R": in_r.strip(),
+                    "場": str(in_place).strip(),
+                    "R": str(in_r).strip(),
                     "券種": in_kind,
-                    "買い目": in_comb.strip(),
+                    "買い目": str(in_comb).strip(),
                     "投資": int(in_stake),
                     "払戻": int(in_pay),
-                    "オッズ": (float(in_odds) if in_odds.strip() != "" else np.nan),
+                    "オッズ": (float(in_odds) if str(in_odds).strip() != "" else np.nan),
                     "的中": 1 if int(in_pay) > 0 else 0,
                 }
                 df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
@@ -140,7 +166,7 @@ with st.form("manual_input_form", clear_on_submit=True):
 if len(df) == 0:
     st.info("まだデータがありません。上のフォームから追加してください。")
 else:
-    # 念のため再整形（環境差対策）
+    # 再整形（環境差対策）
     df["投資"] = _safe_numeric(df["投資"], "int")
     df["払戻"] = _safe_numeric(df["払戻"], "int")
     df["オッズ"] = _safe_numeric(df["オッズ"], "float")
@@ -175,12 +201,17 @@ else:
         (by_kind["払戻"] / by_kind["投資"] * 100).round(2),
         0.0,
     )
+    by_kind["的中率%"] = np.where(
+        by_kind["本数"] > 0,
+        (by_kind["的中"] / by_kind["本数"] * 100).round(2),
+        0.0
+    )
     st.dataframe(by_kind, use_container_width=True)
 
     # =========================
     # 4) 明細（直感的フィルタ）
     # =========================
-    st.subheader("3) 明細（期間・券種でフィルタ）")
+    st.subheader("3) 明細（期間・券種・会場でフィルタ）")
     with st.expander("フィルタ", expanded=True):
         dmin, dmax = get_date_bounds(df)
         colx, coly = st.columns(2)
@@ -189,20 +220,23 @@ else:
         with coly:
             date_to = st.date_input("日付To", value=dmax.to_pydatetime().date())
 
-        st.write("券種フィルタ（OFFにすると除外）")
-        f_nishafuku = st.checkbox("二車複", value=True)
-        f_wide      = st.checkbox("ワイド", value=True)
-        f_3renpuku  = st.checkbox("三連複", value=True)
+        st.write("券種フィルタ（OFFで除外）")
+        kind_checks = {k: st.checkbox(k, value=True) for k in BET_TYPES}
+
+        st.write("会場フィルタ（選択が空なら全件）")
+        venue_selected = st.multiselect("会場を選択", options=VENUES, default=[])
 
     q = df.copy()
-    # 日付で絞込
+    # 日付
     q = q[(q["日付"] >= str(date_from)) & (q["日付"] <= str(date_to))]
-    # 券種で絞込
-    selected_kinds = [k for k, v in {
-        "二車複": f_nishafuku, "ワイド": f_wide, "三連複": f_3renpuku
-    }.items() if v]
-    if selected_kinds:
-        q = q[q["券種"].isin(selected_kinds)]
+    # 券種
+    kinds_on = [k for k, v in kind_checks.items() if v]
+    if kinds_on:
+        q = q[q["券種"].isin(kinds_on)]
+    # 会場
+    if len(venue_selected) > 0:
+        q = q[q["場"].isin(venue_selected)]
+
     # 行回収率
     q["行回収率%"] = np.where(
         _safe_numeric(q["投資"], "int") > 0,
@@ -211,6 +245,58 @@ else:
     )
     q = q.sort_values(["日付", "場", "R", "ID"]).reset_index(drop=True)
     st.dataframe(q, use_container_width=True)
+
+    # =========================
+    # 3.5) 会場別 × 券種 集計（フィルタ結果に連動）
+    # =========================
+    st.subheader("3.5) 会場別 × 券種 集計")
+    base = q.copy()
+    base["投資"] = _safe_numeric(base["投資"], "int")
+    base["払戻"] = _safe_numeric(base["払戻"], "int")
+    base["的中"] = _safe_numeric(base["的中"], "int")
+
+    by_place_kind = base.groupby(["場", "券種"], dropna=False).agg(
+        投資=("投資", "sum"),
+        払戻=("払戻", "sum"),
+        的中=("的中", "sum"),
+        本数=("買い目", "count"),
+    ).reset_index()
+    by_place_kind["回収率%"] = np.where(
+        by_place_kind["投資"] > 0,
+        (by_place_kind["払戻"] / by_place_kind["投資"] * 100).round(2),
+        0.0,
+    )
+    by_place_kind["的中率%"] = np.where(
+        by_place_kind["本数"] > 0,
+        (by_place_kind["的中"] / by_place_kind["本数"] * 100).round(2),
+        0.0,
+    )
+    st.markdown("**会場×券種（ロングテーブル）**")
+    st.dataframe(
+        by_place_kind.sort_values(["回収率%", "本数"], ascending=[False, False]),
+        use_container_width=True,
+    )
+
+    st.markdown("**会場ごとの券種別指標（横持ち）**")
+    pv = by_place_kind.pivot_table(
+        index="場",
+        columns="券種",
+        values=["投資", "払戻", "回収率%", "的中率%"],
+        aggfunc="first",
+    ).fillna(0)
+
+    tot_place = base.groupby("場", dropna=False).agg(
+        総投資=("投資", "sum"),
+        総払戻=("払戻", "sum"),
+    ).reset_index()
+    tot_place["総回収率%"] = np.where(
+        tot_place["総投資"] > 0,
+        (tot_place["総払戻"] / tot_place["総投資"] * 100).round(2),
+        0.0,
+    )
+    pv = pv.merge(tot_place[["場", "総投資", "総払戻", "総回収率%"]], on="場", how="left")
+    pv = pv.sort_values("総回収率%", ascending=False)
+    st.dataframe(pv, use_container_width=True)
 
     # =========================
     # 5) 既存データの編集（Excel風）＆保存
@@ -222,11 +308,12 @@ else:
         use_container_width=True,
         num_rows="fixed",
         column_config={
-            "ID": st.column_config.NumberColumn("ID", help="永続ID（編集非推奨）"),
+            "ID": st.column_config.NumberColumn("ID", help="永続ID（できるだけ編集しない）"),
             "投資": st.column_config.NumberColumn("投資", step=100),
             "払戻": st.column_config.NumberColumn("払戻", step=100),
             "オッズ": st.column_config.NumberColumn("オッズ", step=0.1),
             "的中": st.column_config.NumberColumn("的中", help="0/1。払戻>0なら保存時に1へ更新"),
+            "券種": st.column_config.SelectboxColumn("券種", options=BET_TYPES),
         },
         key="editor_full",
     )
@@ -234,14 +321,12 @@ else:
     col_save1, col_save2 = st.columns([1,2])
     with col_save1:
         if st.button("編集内容を保存"):
-            # 型安全化して保存
             edited["ID"]   = _safe_numeric(edited["ID"], "int")
             edited["投資"] = _safe_numeric(edited["投資"], "int")
             edited["払戻"] = _safe_numeric(edited["払戻"], "int")
             edited["オッズ"] = _safe_numeric(edited["オッズ"], "float")
             edited["的中"] = _safe_numeric(edited["的中"], "int")
             edited["的中"] = np.where(edited["払戻"] > 0, 1, edited["的中"])
-            # 文字列列も正規化
             for c in ["日付","場","R","券種","買い目"]:
                 edited[c] = _str_strip(edited[c])
             save_df(edited)
@@ -256,7 +341,7 @@ else:
         )
 
     # =========================
-    # 6) 複数行削除（チェック → 削除）
+    # 6) 複数行の削除（チェック → 削除）
     # =========================
     st.subheader("5) 複数行の削除（チェックして削除）")
     show = df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
@@ -281,4 +366,4 @@ else:
             save_df(df)
             st.success(f"{len(del_ids)} 行を削除しました。画面を更新してください。")
 
-st.caption("※ 手入力・編集・複数削除対応。全数値列は型を安全変換、0除算回避済み。日付・券種のフィルタは直感的操作。")
+st.caption("※ 会場プリセット＋二車単/三連単対応。全数値列は型を安全変換、0除算回避済み。フィルタは日付・券種・会場に連動。")
