@@ -5,9 +5,7 @@ import numpy as np
 from datetime import date
 from pathlib import Path
 
-# =========================
-# 基本設定
-# =========================
+# ============ 基本設定 ============
 st.set_page_config(page_title="競輪ログ（手入力・編集保存・複数削除・会場プリセット）", layout="centered")
 CSV_PATH = Path("keirin_logs.csv")
 COLUMNS = ["ID","日付","場","R","券種","買い目","投資","払戻","オッズ","的中"]
@@ -21,9 +19,7 @@ VENUES = sorted(set([
 ]))
 BET_TYPES = ["二車複","ワイド","三連複","二車単","三連単"]
 
-# =========================
-# ユーティリティ
-# =========================
+# ============ ユーティリティ ============
 def _safe_numeric(s, kind="int"):
     if kind == "int":
         return pd.to_numeric(s, errors="coerce").fillna(0).astype("int64")
@@ -39,11 +35,10 @@ def load_df()->pd.DataFrame:
         df = pd.read_csv(CSV_PATH, dtype=str)
     else:
         df = pd.DataFrame(columns=COLUMNS, dtype=object)
-    # 欠損列補完
     for c in COLUMNS:
         if c not in df.columns:
             df[c] = "" if c not in ["ID","投資","払戻","オッズ","的中"] else 0
-    # 型整形
+
     df["ID"]   = _safe_numeric(df["ID"], "int")
     df["投資"] = _safe_numeric(df["投資"], "int")
     df["払戻"] = _safe_numeric(df["払戻"], "int")
@@ -52,12 +47,28 @@ def load_df()->pd.DataFrame:
     df["的中"] = np.where(df["払戻"]>0, 1, df["的中"])
     for c in ["日付","場","R","券種","買い目"]:
         df[c] = _str_strip(df[c])
-    # ID採番（0があれば振る）
+
+    # ID振り直し（0が残っていたら採番）
     if (df["ID"]==0).any():
         mx = int(df["ID"].max()) if len(df) else 0
         need = df["ID"]==0
         cnt = int(need.sum())
         df.loc[need,"ID"] = range(mx+1, mx+1+cnt)
+
+    # ID重複があればユニーク化
+    if df["ID"].duplicated().any():
+        used = set()
+        cur_max = int(df["ID"].max()) if len(df) else 0
+        ids = []
+        for v in df["ID"]:
+            v = int(v)
+            if v in used:
+                cur_max += 1
+                ids.append(cur_max)
+            else:
+                ids.append(v); used.add(v)
+        df["ID"] = ids
+
     return df[COLUMNS].copy()
 
 def save_df(df:pd.DataFrame):
@@ -80,15 +91,11 @@ def get_date_bounds(df:pd.DataFrame):
         t=pd.to_datetime(date.today()); return t,t
     return s.min(), s.max()
 
-# =========================
-# データ
-# =========================
+# ============ データ ============
 df = load_df()
 st.title("競輪ログ（手入力・編集保存・複数削除・会場プリセット）")
 
-# =========================
-# 1) 手入力追加（CSVに追記）
-# =========================
+# ============ 1) 手入力追加 ============
 with st.form("manual_input", clear_on_submit=True):
     st.subheader("1) レースを追加（手入力）")
     c1,c2,c3 = st.columns(3)
@@ -129,9 +136,7 @@ with st.form("manual_input", clear_on_submit=True):
             save_df(df)
             st.success("追加しました。")
 
-# =========================
-# 2) 総合メトリクス
-# =========================
+# ============ 2) 総合メトリクス ============
 if len(df)==0:
     st.info("まだデータがありません。上のフォームから追加してください。")
 else:
@@ -152,9 +157,7 @@ else:
     c.metric("累計 回収率", f"{roi:.2f} %")
     d.metric("的中数 / レース", f"{hits}/{trials}")
 
-    # =========================
-    # 3) 券種別集計
-    # =========================
+    # -------- 3) 券種別集計 --------
     st.subheader("2) 券種別集計")
     by_kind=df.groupby("券種", dropna=False).agg(
         投資=("投資","sum"), 払戻=("払戻","sum"), 的中=("的中","sum"), 本数=("買い目","count")
@@ -163,9 +166,7 @@ else:
     by_kind["的中率%"]=np.where(by_kind["本数"]>0,(by_kind["的中"]/by_kind["本数"]*100).round(2),0.0)
     st.dataframe(by_kind, use_container_width=True)
 
-    # =========================
-    # 4) 明細（期間・券種・会場でフィルタ）
-    # =========================
+    # -------- 4) 明細（期間・券種・会場でフィルタ） --------
     st.subheader("3) 明細（期間・券種・会場でフィルタ）")
     dmin,dmax=get_date_bounds(df)
     dmin=dmin.to_pydatetime().date(); dmax=dmax.to_pydatetime().date()
@@ -192,9 +193,7 @@ else:
     q=q.sort_values(["日付","場","R","ID"]).reset_index(drop=True)
     st.dataframe(q, use_container_width=True)
 
-    # =========================
-    # 3.5) 会場別 × 券種 集計（フィルタ結果）
-    # =========================
+    # -------- 3.5) 会場別 × 券種 集計（フィルタ結果） --------
     st.subheader("3.5) 会場別 × 券種 集計")
     base=q.copy()
     base["場"]=base["場"].astype(str).str.strip().replace({"":"不明"})
@@ -219,7 +218,13 @@ else:
             index="場", columns="券種",
             values=["投資","払戻","回収率%","的中率%"],
             aggfunc="first", observed=False
-        ).fillna(0).reset_index()
+        ).fillna(0)
+
+        # ←← ここから安全化（KeyError対策） →→
+        # インデックス名がNoneでも '場' 列として復元
+        if pv.index.name is None:
+            pv.index.name = "場"
+        pv = pv.rename_axis(index="場").reset_index()
 
         # MultiIndex列をフラット化
         def _flat(cols):
@@ -229,6 +234,14 @@ else:
                 else: out.append(str(c))
             return out
         pv.columns=_flat(pv.columns)
+
+        # まれに '場' 列名が 'index' や 'level_0' になる環境がある → 強制リネーム
+        if "場" not in pv.columns:
+            for cand in ["index","level_0"]:
+                if cand in pv.columns:
+                    pv.rename(columns={cand:"場"}, inplace=True)
+                    break
+
         pv["場"]=pv["場"].astype(str)
 
         # トータルは map で安全に付与（merge 不使用）
@@ -239,11 +252,11 @@ else:
         pv["総払戻"]=pv["場"].map(idx["総払戻"]).fillna(0)
         pv["総回収率%"]=pv["場"].map(idx["総回収率%"]).fillna(0)
         pv=pv.sort_values("総回収率%", ascending=False)
+        # ←← ここまで安全化 →→
+
         st.dataframe(pv, use_container_width=True)
 
-    # =========================
-    # 5) 既存データの編集（表で直接 → 保存）
-    # =========================
+    # -------- 5) 既存データの編集（表で直接 → 保存） --------
     st.subheader("4) 既存データの編集（直接書き換え → 保存）")
     edit_view=df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
     try:
@@ -279,9 +292,7 @@ else:
         save_df(edited)
         st.success("保存しました。画面を更新してください。")
 
-    # =========================
-    # 6) 複数行削除（チェック → 削除）
-    # =========================
+    # -------- 6) 複数行削除（チェック → 削除） --------
     st.subheader("5) 複数行の削除（チェックして削除）")
     show=df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
     show["削除"]=False
@@ -294,12 +305,18 @@ else:
         },
         key="editor_delete",
     )
+
     if st.button("チェックした行を削除"):
-        del_ids=del_table.loc[del_table["削除"]==True,"ID"].tolist()
+        # ← 型違いで消えない問題を根絶（int64に強制）
+        del_ids = pd.to_numeric(
+            del_table.loc[del_table["削除"]==True, "ID"], errors="coerce"
+        ).dropna().astype("int64").tolist()
+
         if len(del_ids)==0:
             st.warning("削除対象が選ばれていません。")
         else:
-            df=df[~df["ID"].isin(del_ids)].copy()
+            df["ID"] = _safe_numeric(df["ID"], "int")  # 念のため
+            df = df[~df["ID"].isin(del_ids)].copy()
             save_df(df)
             st.success(f"{len(del_ids)} 行を削除しました。")
             st.rerun()
