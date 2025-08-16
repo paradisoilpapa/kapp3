@@ -5,17 +5,25 @@ import numpy as np
 from datetime import date
 from pathlib import Path
 
-st.set_page_config(page_title="競輪ログ（手入力専用：二車複＋ワイド）", layout="centered")
-
+# =========================
+# 基本設定
+# =========================
+st.set_page_config(page_title="競輪ログ（手入力・編集・削除 完全版）", layout="centered")
 CSV_PATH = Path("keirin_logs.csv")
 COLUMNS = ["ID", "日付", "場", "R", "券種", "買い目", "投資", "払戻", "オッズ", "的中"]
 
-# ============== ユーティリティ ==============
+# =========================
+# ユーティリティ
+# =========================
 def _safe_numeric(s, kind="int"):
     if kind == "int":
         return pd.to_numeric(s, errors="coerce").fillna(0).astype("int64")
     if kind == "float":
         return pd.to_numeric(s, errors="coerce")
+    raise ValueError("kind must be 'int' or 'float'")
+
+def _str_strip(s):
+    return s.astype(str).str.strip()
 
 def load_df() -> pd.DataFrame:
     if CSV_PATH.exists():
@@ -26,34 +34,33 @@ def load_df() -> pd.DataFrame:
     # 欠損列補完
     for c in COLUMNS:
         if c not in df.columns:
-            df[c] = "" if c not in ["投資","払戻","オッズ","的中","ID"] else 0
+            df[c] = "" if c not in ["ID", "投資", "払戻", "オッズ", "的中"] else 0
 
-    # 型整形
-    df["ID"]  = _safe_numeric(df["ID"], "int")
+    # 型整形（安全化）
+    df["ID"]   = _safe_numeric(df["ID"], "int")
     df["投資"] = _safe_numeric(df["投資"], "int")
     df["払戻"] = _safe_numeric(df["払戻"], "int")
     df["オッズ"] = _safe_numeric(df["オッズ"], "float")
     df["的中"] = _safe_numeric(df["的中"], "int")
-    df["的中"] = np.where(df["払戻"] > 0, 1, df["的中"])
+    df["的中"] = np.where(df["払戻"] > 0, 1, df["的中"])  # 払戻>0なら的中=1
 
-    # 文字列列整形
     for c in ["日付", "場", "R", "券種", "買い目"]:
-        df[c] = df[c].astype(str).str.strip()
+        df[c] = _str_strip(df[c])
 
-    # ID 未設定があれば採番
+    # ID未採番を採番
     if (df["ID"] == 0).any():
         max_id = int(df["ID"].max()) if len(df) else 0
         need = df["ID"] == 0
-        cnt = need.sum()
+        cnt = int(need.sum())
         df.loc[need, "ID"] = range(max_id + 1, max_id + 1 + cnt)
 
-    # 列順
+    # 列順を固定
     df = df[COLUMNS].copy()
     return df
 
 def save_df(df: pd.DataFrame) -> None:
     out = df.copy()
-    out["ID"]  = _safe_numeric(out["ID"], "int")
+    out["ID"]   = _safe_numeric(out["ID"], "int")
     out["投資"] = _safe_numeric(out["投資"], "int")
     out["払戻"] = _safe_numeric(out["払戻"], "int")
     out["オッズ"] = _safe_numeric(out["オッズ"], "float")
@@ -63,11 +70,26 @@ def save_df(df: pd.DataFrame) -> None:
 def next_id(df: pd.DataFrame) -> int:
     return int(df["ID"].max()) + 1 if len(df) else 1
 
+def get_date_bounds(df: pd.DataFrame):
+    if len(df) == 0 or (df["日付"] == "").all():
+        today = pd.to_datetime(date.today())
+        return today, today
+    s = pd.to_datetime(df.loc[df["日付"] != "", "日付"], errors="coerce")
+    s = s.dropna()
+    if len(s) == 0:
+        today = pd.to_datetime(date.today())
+        return today, today
+    return s.min(), s.max()
+
+# =========================
+# データ読み込み
+# =========================
 df = load_df()
+st.title("競輪ログ（手入力・編集・削除 完全版）")
 
-st.title("競輪ログ（手入力専用：二車複＋ワイド）")
-
-# ============== 1) 手入力で追加 ==============
+# =========================
+# 1) 手入力で追加
+# =========================
 with st.form("manual_input_form", clear_on_submit=True):
     st.subheader("1) レースを追加（手入力）")
     col1, col2, col3 = st.columns(3)
@@ -112,11 +134,13 @@ with st.form("manual_input_form", clear_on_submit=True):
         except Exception as e:
             st.error(f"追加に失敗しました：{e}")
 
-# ============== 2) 集計 ==============
+# =========================
+# 2) 集計メトリクス
+# =========================
 if len(df) == 0:
     st.info("まだデータがありません。上のフォームから追加してください。")
 else:
-    # 念のため再整形
+    # 念のため再整形（環境差対策）
     df["投資"] = _safe_numeric(df["投資"], "int")
     df["払戻"] = _safe_numeric(df["払戻"], "int")
     df["オッズ"] = _safe_numeric(df["オッズ"], "float")
@@ -134,7 +158,9 @@ else:
     colC.metric("累計 回収率", f"{roi:.2f} %")
     colD.metric("的中数 / レース", f"{hits}/{trials}")
 
-    # ============== 3) 券種別集計 ==============
+    # =========================
+    # 3) 券種別集計
+    # =========================
     st.subheader("2) 券種別集計")
     by_kind = df.groupby("券種", dropna=False).agg(
         投資=("投資", "sum"),
@@ -151,13 +177,108 @@ else:
     )
     st.dataframe(by_kind, use_container_width=True)
 
-    # ============== 4) 明細フィルタ ==============
+    # =========================
+    # 4) 明細（直感的フィルタ）
+    # =========================
     st.subheader("3) 明細（期間・券種でフィルタ）")
-    with st.expander("フィルタ"):
-        colx, coly, colz = st.columns(3)
+    with st.expander("フィルタ", expanded=True):
+        dmin, dmax = get_date_bounds(df)
+        colx, coly = st.columns(2)
         with colx:
-            date_from = st.text_input("日付From（YYYY-MM-DD）", "")
+            date_from = st.date_input("日付From", value=dmin.to_pydatetime().date())
         with coly:
-            date_to = st.text_input("日付To（YYYY-MM-DD）", "")
+            date_to = st.date_input("日付To", value=dmax.to_pydatetime().date())
 
+        st.write("券種フィルタ（OFFにすると除外）")
+        f_nishafuku = st.checkbox("二車複", value=True)
+        f_wide      = st.checkbox("ワイド", value=True)
+        f_3renpuku  = st.checkbox("三連複", value=True)
 
+    q = df.copy()
+    # 日付で絞込
+    q = q[(q["日付"] >= str(date_from)) & (q["日付"] <= str(date_to))]
+    # 券種で絞込
+    selected_kinds = [k for k, v in {
+        "二車複": f_nishafuku, "ワイド": f_wide, "三連複": f_3renpuku
+    }.items() if v]
+    if selected_kinds:
+        q = q[q["券種"].isin(selected_kinds)]
+    # 行回収率
+    q["行回収率%"] = np.where(
+        _safe_numeric(q["投資"], "int") > 0,
+        (_safe_numeric(q["払戻"], "int") / np.where(_safe_numeric(q["投資"], "int")==0, 1, _safe_numeric(q["投資"], "int")) * 100).round(2),
+        0.0
+    )
+    q = q.sort_values(["日付", "場", "R", "ID"]).reset_index(drop=True)
+    st.dataframe(q, use_container_width=True)
+
+    # =========================
+    # 5) 既存データの編集（Excel風）＆保存
+    # =========================
+    st.subheader("4) 既存データの編集（直接書き換え → 保存）")
+    edit_view = df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
+    edited = st.data_editor(
+        edit_view,
+        use_container_width=True,
+        num_rows="fixed",
+        column_config={
+            "ID": st.column_config.NumberColumn("ID", help="永続ID（編集非推奨）"),
+            "投資": st.column_config.NumberColumn("投資", step=100),
+            "払戻": st.column_config.NumberColumn("払戻", step=100),
+            "オッズ": st.column_config.NumberColumn("オッズ", step=0.1),
+            "的中": st.column_config.NumberColumn("的中", help="0/1。払戻>0なら保存時に1へ更新"),
+        },
+        key="editor_full",
+    )
+
+    col_save1, col_save2 = st.columns([1,2])
+    with col_save1:
+        if st.button("編集内容を保存"):
+            # 型安全化して保存
+            edited["ID"]   = _safe_numeric(edited["ID"], "int")
+            edited["投資"] = _safe_numeric(edited["投資"], "int")
+            edited["払戻"] = _safe_numeric(edited["払戻"], "int")
+            edited["オッズ"] = _safe_numeric(edited["オッズ"], "float")
+            edited["的中"] = _safe_numeric(edited["的中"], "int")
+            edited["的中"] = np.where(edited["払戻"] > 0, 1, edited["的中"])
+            # 文字列列も正規化
+            for c in ["日付","場","R","券種","買い目"]:
+                edited[c] = _str_strip(edited[c])
+            save_df(edited)
+            st.success("保存しました。画面を更新してください。")
+
+    with col_save2:
+        st.download_button(
+            label="CSVをダウンロード（バックアップ）",
+            data=df.sort_values(["日付","場","R","ID"]).to_csv(index=False).encode("utf-8"),
+            file_name="keirin_logs_export.csv",
+            mime="text/csv",
+        )
+
+    # =========================
+    # 6) 複数行削除（チェック → 削除）
+    # =========================
+    st.subheader("5) 複数行の削除（チェックして削除）")
+    show = df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
+    show["削除"] = False
+    del_table = st.data_editor(
+        show[["削除","ID","日付","場","R","券種","買い目","投資","払戻","オッズ","的中"]],
+        use_container_width=True,
+        num_rows="fixed",
+        column_config={
+            "削除": st.column_config.CheckboxColumn("削除", help="削除したい行にチェック"),
+            "ID": st.column_config.NumberColumn("ID", help="永続ID", disabled=True),
+        },
+        key="editor_delete",
+    )
+
+    if st.button("チェックした行を削除"):
+        del_ids = del_table.loc[del_table["削除"] == True, "ID"].tolist()
+        if len(del_ids) == 0:
+            st.warning("削除対象が選ばれていません。")
+        else:
+            df = df[~df["ID"].isin(del_ids)].copy()
+            save_df(df)
+            st.success(f"{len(del_ids)} 行を削除しました。画面を更新してください。")
+
+st.caption("※ 手入力・編集・複数削除対応。全数値列は型を安全変換、0除算回避済み。日付・券種のフィルタは直感的操作。")
