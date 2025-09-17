@@ -311,11 +311,10 @@ st.download_button("↓ 採用単価CSVをダウンロード", data=exp_csv, fil
 
 st.caption("© VELOBI Cost — 商品→単価→仕入先履歴の順に管理。ヴェロビ思想：入力最小／内部で安全に補正／一貫フォーマット出力。")
 
-        # ← 型違いで消えない問題を根絶（int64に強制）
-        del_ids = pd.to_numeric(
-            del_table.loc[del_table["削除"]==True, "ID"], errors="coerce"
-        ).dropna().astype("int64").tolist()
-
+# ← 型違いで消えない問題を根絶（int64に強制）
+del_ids = pd.to_numeric(
+    del_table.loc[del_table["削除"]==True, "ID"], errors="coerce"
+).dropna().astype("int64").tolist()
         if len(del_ids)==0:
             st.warning("削除対象が選ばれていません。")
         else:
