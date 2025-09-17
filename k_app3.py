@@ -51,6 +51,37 @@ ITEMS = pd.DataFrame([
     ["plast_hollow_menboku_30","型枠","プラスチック中空面木","30mm","本",None],
 ], columns=["item_id","category","name","spec","base_unit","units_per_box"]).set_index("item_id")
 
+# ==== 中村ブロック（常時） ====
+ITEMS = pd.concat([
+    ITEMS,
+    pd.DataFrame([
+        # item_id,                 category,  name,        spec,          base_unit, units_per_box
+        ["block_C12_basic",        "ブロック材","C種12cm",   "基本",        "個", None],
+        ["block_C12_corner",       "ブロック材","C種12cm",   "隅",          "個", None],
+        ["block_C12_yokokin",      "ブロック材","C種12cm",   "横筋",        "個", None],
+        ["block_C12_half",         "ブロック材","C種12cm",   "1/2",        "個", None],
+
+        ["block_C15_basic",        "ブロック材","C種15cm",   "基本",        "個", None],
+        ["block_C15_yokokin",      "ブロック材","C種15cm",   "横筋",        "個", None],
+
+        ["block_C19_basic",        "ブロック材","C種19cm",   "基本",        "個", None],
+        ["block_C19_yokokin",      "ブロック材","C種19cm",   "横筋",        "個", None],
+
+        ["block_B10_basic",        "ブロック材","B種10cm",   "基本",        "個", None],
+        ["block_B10_corner",       "ブロック材","B種10cm",   "隅",          "個", None],
+
+        ["bag_cement",             "資材",      "袋セメント", "25kg",       "袋", None],
+        ["bag_sand",               "資材",      "袋砂",       "",           "袋", None],
+        ["bag_gravel",             "資材",      "袋砂利",     "",           "袋", None],
+
+        # 参考：棒鋼10mm×4m（“本”売り） ※既存のm換算鉄筋とは別ID
+        ["rebar_bar10_4m",         "鉄筋",      "鉄筋",       "φ10 4m棒",   "本", None],
+    ], columns=["item_id","category","name","spec","base_unit","units_per_box"]).set_index("item_id")
+])
+ITEMS_D = ITEMS.to_dict(orient="index")  # 追記後に再生成
+
+
+
 # 径→kg/m（JIS実務値）
 REBAR_KG_PER_M = {
     "D6":0.222,"D10":0.617,"D13":0.995,"D16":1.560,"D19":2.250,
@@ -99,6 +130,34 @@ PRICES_INIT = pd.DataFrame([
 ], columns=[
     "date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"
 ])
+
+# ==== 中村ブロック 初期価格（伝票ベースの代表単価） ====
+PRICES_INIT = pd.concat([
+    PRICES_INIT,
+    pd.DataFrame([
+        # date,       vendor,        item_id,               standard, diameter, invoice_unit, unit_price, qty_per_invoice_unit, source
+        ["2025-03-01","中村ブロック","block_C12_basic",     "",       "",       "個",          180,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_C12_corner",    "",       "",       "個",          180,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_C12_yokokin",   "",       "",       "個",          180,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_C12_half",      "",       "",       "個",          180,        None,                "伝票写し"],
+
+        ["2025-03-01","中村ブロック","block_C15_basic",     "",       "",       "個",          210,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_C15_yokokin",   "",       "",       "個",          210,        None,                "伝票写し"],
+
+        ["2025-03-01","中村ブロック","block_C19_basic",     "",       "",       "個",          295,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_C19_yokokin",   "",       "",       "個",          295,        None,                "伝票写し"],
+
+        ["2025-03-01","中村ブロック","block_B10_basic",     "",       "",       "個",          145,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","block_B10_corner",    "",       "",       "個",          145,        None,                "伝票写し"],
+
+        ["2025-03-01","中村ブロック","bag_cement",          "",       "",       "袋",          780,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","bag_sand",            "",       "",       "袋",          280,        None,                "伝票写し"],
+        ["2025-03-01","中村ブロック","bag_gravel",          "",       "",       "袋",          280,        None,                "伝票写し"],
+
+        ["2025-03-01","中村ブロック","rebar_bar10_4m",      "",       "",       "本",          370,        None,                "伝票写し"],
+    ], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
+])
+
 
 # -------------------------------------
 # セッション初期化
