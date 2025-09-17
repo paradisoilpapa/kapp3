@@ -335,6 +335,119 @@ else:
                        file_name=f"easy_quote_{datetime.now():%Y%m%d}.csv",
                        mime="text/csv")
 
+# -------------------------------------
+# 鉄筋スラブ 自動拾い（ベータ）
+# -------------------------------------
+st.markdown("---")
+st.subheader("鉄筋スラブ自動拾い（ベータ）→ 見積に追加")
+
+with st.form("rebar_slab_form"):
+    c0, c1 = st.columns([1,3])
+    input_mode = c0.radio("寸法入力", ["長さ×幅", "周長＋面積"], horizontal=True)
+
+    if input_mode == "長さ×幅":
+        L = c1.number_input("長さL (m)", min_value=0.0, step=0.1, value=10.0)
+        W = c1.number_input("幅W (m)",   min_value=0.0, step=0.1, value=6.0)
+        A = L * W
+        P = 2*(L+W)
+    else:
+        P = c1.number_input("周長P (m)", min_value=0.0, step=0.1, value=32.0)
+        A = c1.number_input("面積A (㎡)", min_value=0.0, step=0.1, value=60.0)
+        # 矩形を仮定してL, Wを逆算（L+W=P/2, LW=A）
+        S = P/2.0
+        D = S*S - 4*A
+        if D >= 0:
+            L = (S + (D**0.5))/2.0
+            W = S - L
+        else:
+            L = 0.0; W = 0.0  # 不整合（入力見直しアラートは下で表示）
+
+    st.caption(f"→ 内法想定: L={L:.2f}m, W={W:.2f}m, 面積={A:.2f}㎡, 周長={P:.2f}m")
+
+    c2, c3, c4, c5 = st.columns(4)
+    pitch_x = c2.number_input("X方向ピッチ (m)", min_value=0.05, step=0.01, value=0.20)  # X: 長さ方向に並ぶ本数を決める等
+    pitch_y = c3.number_input("Y方向ピッチ (m)", min_value=0.05, step=0.01, value=0.20)
+    layer = c4.selectbox("配筋", ["単層(シングル)","複層(ダブル)"], index=0)
+    waste = c5.number_input("ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
+
+    c6, c7, c8, c9 = st.columns(4)
+    stock_len = c6.number_input("定尺長 (m)", min_value=3.0, max_value=12.0, step=0.5, value=4.0)
+    rebar_choice = c7.selectbox("鉄筋種類", [
+        ("rebar_D10_NA",    "無規格 D10"),
+        ("rebar_D10_SD295A","SD295A D10"),
+        ("rebar_D13_SD295A","SD295A D13"),
+        ("rebar_D16_SD345","SD345 D16"),
+    ], format_func=lambda x: x[1])
+    tie_per_sqm = c8.number_input("結束線 係数 (kg/㎡)", min_value=0.0, step=0.1, value=1.0)
+    sykoro_per_sqm = c9.number_input("サイコロ 係数 (個/㎡)", min_value=0.0, step=0.1, value=1.2)
+
+    submitted = st.form_submit_button("この条件で数量を計算して見積に追加する")
+
+if submitted:
+    errors = []
+    if L <= 0 or W <= 0 or A <= 0 or P <= 0:
+        errors.append("寸法の整合が取れていません（周長と面積の関係、またはL×Wの入力を確認）。")
+
+    if pitch_x <= 0 or pitch_y <= 0:
+        errors.append("ピッチは0より大きい値にしてください。")
+
+    if errors:
+        for e in errors: st.error(e)
+    else:
+        # 本数（端部含む：床端からピッチで割り、+1）
+        import math
+        n_x = int(math.floor(W / pitch_x)) + 1  # X方向の本数（長さLの棒がn_x本）
+        n_y = int(math.floor(L / pitch_y)) + 1  # Y方向の本数（幅W  の棒がn_y本）
+
+        layers = 2 if layer.startswith("複層") else 1
+
+        # 総延長（m）＝ L×n_x + W×n_y
+        total_m = (L * n_x + W * n_y) * layers
+        total_m *= (1.0 + waste/100.0)
+
+        # 定尺本数（切上げ）
+        bars_stock = int(math.ceil(total_m / stock_len))
+
+        # 鉄筋kg
+        rebar_id = rebar_choice[0]
+        # 径をitem_idから推定（'D10'など）
+        dia_hint = "D10" if "D10" in rebar_id else ("D13" if "D13" in rebar_id else ("D16" if "D16" in rebar_id else ""))
+        kgpm = REBAR_KG_PER_M.get(dia_hint, 0.0)
+        total_kg = total_m * kgpm
+
+        # 結束線（kg）・サイコロ（個）を係数で
+        tie_kg = A * tie_per_sqm
+        sykoro_pcs = int(math.ceil(A * sykoro_per_sqm))
+
+        # ---- 見積カート（セッション）に反映 ----
+        if "pick_state" not in st.session_state:
+            st.session_state["pick_state"] = {"selected": set(), "qty": {}}
+        S = st.session_state["pick_state"]
+
+        # 鉄筋は「m単位」で数量投入（m単価に換算済み）
+        S["selected"].add(rebar_id)
+        S["qty"][rebar_id] = S["qty"].get(rebar_id, 0.0) + float(total_m)
+
+        # 結束線（kg）
+        tie_id = "tie_wire_band5_350"  # 伝票に合わせて#5 350mmを代表として使用
+        S["selected"].add(tie_id)
+        S["qty"][tie_id] = S["qty"].get(tie_id, 0.0) + float(tie_kg)
+
+        # サイコロ（個）
+        sykoro_id = "conc_sykoro_4x5x6"
+        S["selected"].add(sykoro_id)
+        S["qty"][sykoro_id] = S["qty"].get(sykoro_id, 0.0) + float(sykoro_pcs)
+
+        # 状態をユーザー向けに表示
+        st.success("見積に数量を追加しました。下の表に反映されています。")
+        st.write({
+            "鉄筋（m）": round(total_m, 1),
+            "鉄筋 定尺本数(概算)": bars_stock,
+            "鉄筋(kg)": round(total_kg, 1),
+            "結束線(kg)": round(tie_kg, 1),
+            "サイコロ(個)": int(sykoro_pcs),
+            "本数(単層ベース)": {"X方向": n_x, "Y方向": n_y, "層数": layers},
+        })
 
 
 # -------------------------------------
