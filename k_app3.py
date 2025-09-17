@@ -336,171 +336,149 @@ else:
                        mime="text/csv")
 
 # -------------------------------------
-# 鉄筋スラブ 自動拾い（W×D入力専用）
+# 鉄筋スラブ 自動拾い（鉄筋方式 vs メッシュ方式 比較）
 # -------------------------------------
 st.markdown("---")
-st.subheader("鉄筋スラブ自動拾い（外寸L×W入力専用）")
+st.subheader("鉄筋スラブ自動拾い（鉄筋方式 vs メッシュ方式 比較）")
 
 with st.form("rebar_mesh_form"):
-    # 寸法入力（外寸）
+    # 寸法入力
     c1, c2 = st.columns(2)
     L = c1.number_input("長さ L (m)", min_value=0.0, step=0.1, value=10.0)
     W = c2.number_input("幅 W (m)",   min_value=0.0, step=0.1, value=6.0)
 
-    # 自動計算
     P = 2*(L+W)
     A = L*W
-    st.caption(f"→ 自動計算：周長 = {P:.2f} m ／ 面積 = {A:.2f} ㎡")
+    st.caption(f"→ 周長 = {P:.2f} m ／ 面積 = {A:.2f} ㎡")
 
     # かぶり・ロス
     c_cov1, c_cov2 = st.columns(2)
     cover_edge_mm = c_cov1.number_input("かぶり（周囲）mm", min_value=0.0, step=5.0, value=40.0)
     waste = c_cov2.number_input("ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
 
-    # 配筋・ピッチ
-    c2, c3, c4 = st.columns(3)
-    pitch_x_mm = c2.number_input("X方向ピッチ(mm)", min_value=50.0, step=10.0, value=200.0)
-    pitch_y_mm = c3.number_input("Y方向ピッチ(mm)", min_value=50.0, step=10.0, value=200.0)
-    layer = c4.selectbox("配筋", ["単層(シングル)","複層(ダブル)"], index=0)
+    # ピッチ & 配筋
+    c3, c4, c5 = st.columns(3)
+    pitch_x_mm = c3.number_input("X方向ピッチ(mm)", min_value=50.0, step=10.0, value=200.0)
+    pitch_y_mm = c4.number_input("Y方向ピッチ(mm)", min_value=50.0, step=10.0, value=200.0)
+    layer = c5.selectbox("配筋", ["単層(シングル)","複層(ダブル)"], index=0)
     layers = 2 if layer.startswith("複層") else 1
 
-    # 鉄筋・結束線・サイコロ
-    c5, c6, c7 = st.columns(3)
-    stock_len = c5.number_input("定尺長 (m)", min_value=3.0, max_value=12.0, step=0.5, value=4.0)
-    rebar_choice = c6.selectbox("鉄筋種類", [
+    # 鉄筋設定
+    c6, c7, c8 = st.columns(3)
+    stock_len = c6.number_input("定尺長 (m)", min_value=3.0, max_value=12.0, step=0.5, value=4.0)
+    rebar_choice = c7.selectbox("鉄筋種類", [
         ("rebar_D10_NA",    "無規格 D10"),
         ("rebar_D10_SD295A","SD295A D10"),
         ("rebar_D13_SD295A","SD295A D13"),
         ("rebar_D16_SD345", "SD345 D16"),
     ], format_func=lambda x: x[1])
+    dia_hint = "D10" if "D10" in rebar_choice[0] else ("D13" if "D13" in rebar_choice[0] else "D16")
 
-    tie_mode = c7.selectbox("結束線の算定方式", ["交点係数（g/交点）", "面積係数（kg/㎡）"], index=0)
-    c8, c9, c10 = st.columns(3)
-    tie_g_per_knot = c8.number_input("交点係数(g/交点)", min_value=0.0, step=0.5, value=4.0)
-    tie_kg_per_sqm  = c9.number_input("面積係数(kg/㎡)", min_value=0.0, step=0.1, value=0.4)
-    # ★サイコロは面積係数（1層あたり 4.0 個/㎡ が目安）
-    sykoro_per_sqm_layer = c10.number_input("サイコロ係数(個/㎡/層)", min_value=0.0, step=0.1, value=4.0)
+    # 結束線・サイコロ
+    tie_kg_per_sqm = st.number_input("結束線係数 (kg/㎡/層)", min_value=0.0, step=0.1, value=0.4)
+    sykoro_per_sqm_layer = st.number_input("サイコロ係数 (個/㎡/層)", min_value=0.0, step=0.1, value=4.0)
 
-    # メッシュ置換（0.9×1.8m）
-    st.markdown("**メッシュ置換（任意）**")
-    c11, c12, c13, c14 = st.columns(4)
-    use_mesh = c11.checkbox("メッシュ置換の枚数も計算する", value=True)
-    mesh_w, mesh_h = 1.8, 0.9  # m
-    mesh_lap_x = c12.number_input("メッシュの重なり(横) m", min_value=0.0, step=0.05, value=0.15)
-    mesh_lap_y = c13.number_input("メッシュの重なり(縦) m", min_value=0.0, step=0.05, value=0.15)
-    mesh_to_quote = c14.checkbox("計算したメッシュを見積に反映", value=False)
+    # メッシュ設定
+    st.markdown("**メッシュ仕様（0.9×1.8m）**")
+    c9, c10 = st.columns(2)
+    mesh_lap_x = c9.number_input("メッシュ重なり(横) m", min_value=0.0, step=0.05, value=0.15)
+    mesh_lap_y = c10.number_input("メッシュ重なり(縦) m", min_value=0.0, step=0.05, value=0.15)
 
-    submitted = st.form_submit_button("数量を計算して見積に反映")
+    # 見積反映チェック
+    c11, c12 = st.columns(2)
+    add_rebar = c11.checkbox("鉄筋方式を見積に反映", value=False)
+    add_mesh  = c12.checkbox("メッシュ方式を見積に反映", value=False)
+
+    submitted = st.form_submit_button("数量を計算して比較")
 
 if submitted:
-    errs = []
-    if L<=0 or W<=0 or A<=0 or P<=0:
-        errs.append("寸法の整合が取れていません（外寸の周長・面積、またはL×Wを確認）。")
-    # 有効寸法（かぶり分を控除）
+    # 内法寸法
     cov = cover_edge_mm / 1000.0
-    L_eff = max(0.0, L - 2*cov)
-    W_eff = max(0.0, W - 2*cov)
+    L_eff, W_eff = max(0,L-2*cov), max(0,W-2*cov)
     A_eff = L_eff * W_eff
-    if L_eff<=0 or W_eff<=0:
-        errs.append("かぶりが大きすぎます。L-2×かぶり, W-2×かぶり が正になるようにしてください。")
 
-    # ピッチ
-    px = pitch_x_mm/1000.0
-    py = pitch_y_mm/1000.0
-    if px<=0 or py<=0:
-        errs.append("ピッチは0より大きい値にしてください。")
+    # -----------------------
+    # 鉄筋方式 計算
+    # -----------------------
+    px, py = pitch_x_mm/1000.0, pitch_y_mm/1000.0
+    n_x = int(math.floor(W_eff / px)) + 1
+    n_y = int(math.floor(L_eff / py)) + 1
+    total_m = (n_x * L_eff + n_y * W_eff) * layers
+    total_m *= (1.0 + waste/100.0)
 
-    if errs:
-        for e in errs: st.error(e)
-    else:
-        # 本数と総延長（X: W方向に並ぶ→各棒は L_eff の長さ / Y: L方向に並ぶ→各棒は W_eff の長さ）
-        n_x = int(math.floor(W_eff / px)) + 1  # L方向の棒の本数
-        n_y = int(math.floor(L_eff / py)) + 1  # W方向の棒の本数
-        total_m = (n_x * L_eff + n_y * W_eff) * layers
-        total_m *= (1.0 + waste/100.0)
+    kgpm = REBAR_KG_PER_M.get(dia_hint, 0.0)
+    total_kg = total_m * kgpm
+    bars_stock = math.ceil(total_m / stock_len)
+    tie_kg = A_eff * tie_kg_per_sqm * layers
+    sykoro_pcs = math.ceil(A_eff * sykoro_per_sqm_layer * layers)
 
-        # 鉄筋kg
-        rebar_id = rebar_choice[0]
-        dia_hint = "D10" if "D10" in rebar_id else ("D13" if "D13" in rebar_id else ("D16" if "D16" in rebar_id else ""))
-        kgpm = REBAR_KG_PER_M.get(dia_hint, 0.0)
-        total_kg = total_m * kgpm
+    # 単価取得
+    rebar_price = TABLE.loc[TABLE["商品ID"]==rebar_choice[0], "◎ 採用単価"].values[0]
+    tie_price   = TABLE.loc[TABLE["商品ID"]=="tie_wire_band5_350", "◎ 採用単価"].values[0]
+    sykoro_price= TABLE.loc[TABLE["商品ID"]=="conc_sykoro_4x5x6", "◎ 採用単価"].values[0]
 
-        # 定尺本数（概算）
-        bars_stock = int(math.ceil(total_m / stock_len))
+    rebar_cost = total_m * rebar_price
+    tie_cost   = tie_kg * tie_price
+    sykoro_cost= sykoro_pcs * sykoro_price
+    total_cost_rebar = rebar_cost + tie_cost + sykoro_cost
 
-        # 交点数（1層あたり）＝ n_x × n_y
-        knots_per_layer = n_x * n_y
-        # 結束線
-        if tie_mode.startswith("交点"):
-            tie_kg = (knots_per_layer * layers) * (tie_g_per_knot / 1000.0)
-        else:
-            tie_kg = A_eff * tie_kg_per_sqm * layers  # 層ごとに面積係数をかける運用なら *layers は外す
+    # -----------------------
+    # メッシュ方式 計算
+    # -----------------------
+    mesh_w, mesh_h = 1.8, 0.9
+    def needed_sheets(target, sheet, lap):
+        step = max(sheet - lap, 0.01)
+        return 1 + int(math.ceil((target - sheet)/step)) if target>sheet else 1
 
-        # サイコロ：有効面積×係数×層数（切上げ）
-        sykoro_pcs = int(math.ceil(A_eff * sykoro_per_sqm_layer * layers))
+    nx = needed_sheets(L_eff, mesh_w, mesh_lap_x)
+    ny = needed_sheets(W_eff, mesh_h, mesh_lap_y)
+    mesh_sheets = nx * ny * layers
 
-        # ---- 見積カートに反映 ----
-        if "pick_state" not in st.session_state:
-            st.session_state["pick_state"] = {"selected": set(), "qty": {}}
-        S = st.session_state["pick_state"]
+    mesh_price = TABLE.loc[TABLE["商品ID"]=="cdmesh_6_150", "◎ 採用単価"].values[0]
+    mesh_cost = mesh_sheets * mesh_price
+    tie_cost_m = tie_kg * tie_price
+    sykoro_cost_m = sykoro_pcs * sykoro_price
+    total_cost_mesh = mesh_cost + tie_cost_m + sykoro_cost_m
 
-        # 鉄筋は「m単位」で投入（m単価に換算済み）
-        S["selected"].add(rebar_id)
-        S["qty"][rebar_id] = S["qty"].get(rebar_id, 0.0) + float(total_m)
+    # -----------------------
+    # 結果表示
+    # -----------------------
+    st.success("比較結果")
+    st.write({
+        "鉄筋方式": {
+            "総延長(m)": round(total_m,1),
+            "重量(kg)": round(total_kg,1),
+            "定尺本数": bars_stock,
+            "結束線(kg)": round(tie_kg,2),
+            "サイコロ(個)": sykoro_pcs,
+            "小計(円)": round(total_cost_rebar,0),
+        },
+        "メッシュ方式": {
+            "枚数": mesh_sheets,
+            "結束線(kg)": round(tie_kg,2),
+            "サイコロ(個)": sykoro_pcs,
+            "小計(円)": round(total_cost_mesh,0),
+        }
+    })
 
-        # 結束線（kg）
-        tie_id = "tie_wire_band5_350"  # 代表として#5 350mm
-        S["selected"].add(tie_id)
-        S["qty"][tie_id] = S["qty"].get(tie_id, 0.0) + float(tie_kg)
+    # -----------------------
+    # 見積カート反映
+    # -----------------------
+    S = st.session_state["pick_state"]
+    if add_rebar:
+        S["selected"].update([rebar_choice[0], "tie_wire_band5_350", "conc_sykoro_4x5x6"])
+        S["qty"][rebar_choice[0]] = S["qty"].get(rebar_choice[0],0) + total_m
+        S["qty"]["tie_wire_band5_350"] = S["qty"].get("tie_wire_band5_350",0) + tie_kg
+        S["qty"]["conc_sykoro_4x5x6"]  = S["qty"].get("conc_sykoro_4x5x6",0) + sykoro_pcs
+        st.success("鉄筋方式をカートに反映しました。")
+    if add_mesh:
+        S["selected"].update(["cdmesh_6_150","tie_wire_band5_350","conc_sykoro_4x5x6"])
+        S["qty"]["cdmesh_6_150"] = S["qty"].get("cdmesh_6_150",0) + mesh_sheets
+        S["qty"]["tie_wire_band5_350"] = S["qty"].get("tie_wire_band5_350",0) + tie_kg
+        S["qty"]["conc_sykoro_4x5x6"]  = S["qty"].get("conc_sykoro_4x5x6",0) + sykoro_pcs
+        st.success("メッシュ方式をカートに反映しました。")
 
-        # サイコロ（個）
-        sykoro_id = "conc_sykoro_4x5x6"
-        S["selected"].add(sykoro_id)
-        S["qty"][sykoro_id] = S["qty"].get(sykoro_id, 0.0) + float(sykoro_pcs)
-
-        # メッシュ置換（計算のみ or 見積反映）
-        mesh_result = None
-        if use_mesh and L_eff>0 and W_eff>0:
-            def needed_sheets(target_len, sheet, lap):
-                if target_len <= 0: return 0
-                if target_len <= sheet: return 1
-                step = max(sheet - lap, 0.01)  # 負やゼロ防止
-                return 1 + int(math.ceil((target_len - sheet)/step))
-
-            # 2通りの向きで少ない枚数を採用
-            # 向きA: L方向=1.8, W方向=0.9
-            nxA = needed_sheets(L_eff, mesh_w, mesh_lap_x)
-            nyA = needed_sheets(W_eff, mesh_h, mesh_lap_y)
-            totalA = nxA * nyA
-            # 向きB: L方向=0.9, W方向=1.8
-            nxB = needed_sheets(L_eff, mesh_h, mesh_lap_x)
-            nyB = needed_sheets(W_eff, mesh_w, mesh_lap_y)
-            totalB = nxB * nyB
-
-            if totalA <= totalB:
-                mesh_orient = "L=1.8m×W=0.9m"
-                mesh_nx, mesh_ny, mesh_sheets = nxA, nyA, totalA
-            else:
-                mesh_orient = "L=0.9m×W=1.8m"
-                mesh_nx, mesh_ny, mesh_sheets = nxB, nyB, totalB
-
-            mesh_total = mesh_sheets * layers  # 複層なら×2
-            mesh_result = {"向き": mesh_orient, "横枚数": mesh_nx, "縦枚数": mesh_ny, "合計枚数(層合計)": mesh_total}
-
-            if mesh_to_quote:
-                mesh_id = "cdmesh_6_150"
-                S["selected"].add(mesh_id)
-                S["qty"][mesh_id] = S["qty"].get(mesh_id, 0.0) + float(mesh_total)
-
-        st.success("算出完了：見積カートに反映しました（下の選択品テーブルに出ます）。")
-        st.write({
-            "内法寸法": {"L_eff(m)": round(L_eff,2), "W_eff(m)": round(W_eff,2), "A_eff(㎡)": round(A_eff,2)},
-            "鉄筋": {"総延長(m)": round(total_m,1), "概算定尺本数": bars_stock, "概算重量(kg)": round(total_kg,1)},
-            "交点/結束線": {"交点/層": knots_per_layer, "結束線(kg)": round(tie_kg,2)},
-            "サイコロ": {"個数": sykoro_pcs, "係数(個/㎡/層)": sykoro_per_sqm_layer},
-            "メッシュ置換": (mesh_result if mesh_result else "計算なし")
-        })
-        st.rerun()
+    st.rerun()
 
 # -------------------------------------
 # 履歴（任意表示）
