@@ -361,9 +361,7 @@ with st.form("rebar_mesh_form"):
     c1, c2 = st.columns(2)
     L = c1.number_input("長さ L (m)", min_value=0.0, step=0.1, value=10.0)
     W = c2.number_input("幅 W (m)",   min_value=0.0, step=0.1, value=6.0)
-
-    P = 2*(L+W)
-    A = L*W
+    P = 2*(L+W); A = L*W
     st.caption(f"→ 周長 = {P:.2f} m ／ 面積 = {A:.2f} ㎡")
 
     # かぶり・ロス
@@ -394,161 +392,125 @@ with st.form("rebar_mesh_form"):
     tie_kg_per_sqm = c9.number_input("結束線係数 (kg/㎡/層)", min_value=0.0, step=0.1, value=0.4)
     sykoro_per_sqm_layer = c10.number_input("サイコロ係数 (個/㎡/層)", min_value=0.0, step=0.1, value=4.0)
 
-    # メッシュ仕様（0.9×1.8m）
+    # メッシュ仕様
     st.markdown("**メッシュ仕様（0.9×1.8m）**")
     c11, c12 = st.columns(2)
     mesh_lap_x = c11.number_input("メッシュ重なり(横) m", min_value=0.0, step=0.05, value=0.15)
     mesh_lap_y = c12.number_input("メッシュ重なり(縦) m", min_value=0.0, step=0.05, value=0.15)
 
-    # 見積反映チェック
-    c13, c14 = st.columns(2)
-    add_rebar = c13.checkbox("鉄筋方式を見積に反映（上書き）", value=False)
-    add_mesh  = c14.checkbox("メッシュ方式を見積に反映（上書き）", value=False)
+    # 見積反映モード（排他的）
+    mode = st.radio("どちらの方式を見積に反映するか？",
+                    ["反映しない","鉄筋方式","メッシュ方式"], index=0)
 
     submitted = st.form_submit_button("数量を計算して比較")
 
 if submitted:
-    # ---- 内法寸法（かぶり控除）----
     cov = cover_edge_mm / 1000.0
     L_eff, W_eff = max(0.0, L - 2*cov), max(0.0, W - 2*cov)
     A_eff = L_eff * W_eff
     if L_eff <= 0 or W_eff <= 0:
         st.error("かぶりが大きすぎます。L-2×かぶり, W-2×かぶり が正になるようにしてください。")
     else:
-        # -----------------------
-        # 鉄筋方式 計算
-        # -----------------------
+        # 鉄筋方式
         px, py = pitch_x_mm/1000.0, pitch_y_mm/1000.0
         n_x = int(math.floor(W_eff / px)) + 1
         n_y = int(math.floor(L_eff / py)) + 1
         total_m = (n_x * L_eff + n_y * W_eff) * layers
         total_m *= (1.0 + waste/100.0)
-
         kgpm = REBAR_KG_PER_M.get(dia_hint, 0.0)
         total_kg = total_m * kgpm
         bars_stock = math.ceil(total_m / stock_len)
         tie_kg = A_eff * tie_kg_per_sqm * layers
         sykoro_pcs = math.ceil(A_eff * sykoro_per_sqm_layer * layers)
 
-        # 単価取得（採用単価◎）
         rebar_price = float(TABLE.loc[TABLE["商品ID"]==rebar_choice[0], "◎ 採用単価"].values[0])
         tie_price   = float(TABLE.loc[TABLE["商品ID"]=="tie_wire_band5_350", "◎ 採用単価"].values[0])
         sykoro_price= float(TABLE.loc[TABLE["商品ID"]=="conc_sykoro_4x5x6", "◎ 採用単価"].values[0])
-
         rebar_cost = total_m * rebar_price
         tie_cost   = tie_kg * tie_price
         sykoro_cost= sykoro_pcs * sykoro_price
         total_cost_rebar = rebar_cost + tie_cost + sykoro_cost
 
-        # -----------------------
-        # メッシュ方式 計算
-        # -----------------------
-        mesh_w, mesh_h = 1.8, 0.9  # m
+        # メッシュ方式
+        mesh_w, mesh_h = 1.8, 0.9
         def needed_sheets(target, sheet, lap):
             if target <= 0: return 0
             if target <= sheet: return 1
             step = max(sheet - lap, 0.01)
             return 1 + int(math.ceil((target - sheet)/step))
-
         nxA = needed_sheets(L_eff, mesh_w, mesh_lap_x)
         nyA = needed_sheets(W_eff, mesh_h, mesh_lap_y)
         nxB = needed_sheets(L_eff, mesh_h, mesh_lap_x)
         nyB = needed_sheets(W_eff, mesh_w, mesh_lap_y)
-        mesh_sheets = min(nxA*nyA, nxB*nyB) * layers  # 少ない向きを採用
+        mesh_sheets = min(nxA*nyA, nxB*nyB) * layers
 
         mesh_price = float(TABLE.loc[TABLE["商品ID"]=="cdmesh_6_150", "◎ 採用単価"].values[0])
         mesh_cost  = mesh_sheets * mesh_price
-        tie_cost_m = tie_kg * tie_price            # メッシュ時も結束線は使う（端部中心）
-        sykoro_cost_m = sykoro_pcs * sykoro_price  # サイコロは同一係数
+        tie_cost_m = tie_kg * tie_price
+        sykoro_cost_m = sykoro_pcs * sykoro_price
         total_cost_mesh = mesh_cost + tie_cost_m + sykoro_cost_m
 
-        # -----------------------
-        # 結果表示（比較）
-        # -----------------------
+        # 表示
         st.success("比較結果（税抜・原価）")
         colA, colB = st.columns(2)
         with colA:
             st.markdown("#### ■ 鉄筋方式")
-            st.write({
-                "総延長(m)": round(total_m,1),
-                "重量(kg)": round(total_kg,1),
-                "定尺本数(概算)": bars_stock,
-                "結束線(kg)": round(tie_kg,2),
-                "サイコロ(個)": int(sykoro_pcs),
-                "小計(円)": round(total_cost_rebar),
-            })
+            st.write({"総延長(m)": round(total_m,1),"重量(kg)": round(total_kg,1),
+                      "定尺本数(概算)": bars_stock,"結束線(kg)": round(tie_kg,2),
+                      "サイコロ(個)": int(sykoro_pcs),"小計(円)": round(total_cost_rebar)})
         with colB:
             st.markdown("#### ■ メッシュ方式")
-            st.write({
-                "枚数": int(mesh_sheets),
-                "結束線(kg)": round(tie_kg,2),
-                "サイコロ(個)": int(sykoro_pcs),
-                "小計(円)": round(total_cost_mesh),
-            })
+            st.write({"枚数": int(mesh_sheets),"結束線(kg)": round(tie_kg,2),
+                      "サイコロ(個)": int(sykoro_pcs),"小計(円)": round(total_cost_mesh)})
 
-    # -----------------------
-    # 見積カート反映（非累積／上書き）
-    # -----------------------
-    S  = st.session_state["pick_state"]
-    AI = st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
+        # ---- 見積カート反映（非累積）----
+        st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
+        st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
+        S  = st.session_state["pick_state"]
+        AI = st.session_state["auto_injected"]
 
-    def apply_mode(mode: str, new_items: dict):
-        """同じmode（'rebar' or 'mesh'）の前回自動投入を差し戻し→今回分で上書き。
-           手入力済みは維持（現在量 − 前回自動 + 今回自動）。"""
-        prev = AI.get(mode, {}) or {}
+        def apply_mode(mode: str, new_items: dict):
+            prev = AI.get(mode, {}) or {}
+            # 差し戻し＆上書き
+            for iid, new_q in new_items.items():
+                cur = float(S["qty"].get(iid, 0.0))
+                prev_q = float(prev.get(iid, 0.0))
+                nxt = cur - prev_q + float(new_q)
+                if nxt <= 0:
+                    S["qty"].pop(iid, None); S["selected"].discard(iid)
+                else:
+                    S["qty"][iid] = nxt; S["selected"].add(iid)
+            # 今回なくなった品をクリア
+            for iid in set(prev.keys()) - set(new_items.keys()):
+                cur = float(S["qty"].get(iid, 0.0)); prev_q = float(prev.get(iid, 0.0))
+                nxt = cur - prev_q
+                if nxt <= 0:
+                    S["qty"].pop(iid, None); S["selected"].discard(iid)
+                else:
+                    S["qty"][iid] = nxt; S["selected"].add(iid)
+            AI[mode] = dict(new_items)
 
-        # 1) 差し戻し＆上書き
-        for iid, new_q in new_items.items():
-            cur    = float(S["qty"].get(iid, 0.0))
-            prev_q = float(prev.get(iid, 0.0))
-            nxt    = cur - prev_q + float(new_q)
-            if nxt <= 0:
-                S["qty"].pop(iid, None)
-                S["selected"].discard(iid)
-            else:
-                S["qty"][iid] = nxt
-                S["selected"].add(iid)
+        # 今回数量
+        rebar_items = {
+            rebar_choice[0]: float(total_m),
+            "tie_wire_band5_350": float(tie_kg),
+            "conc_sykoro_4x5x6": float(sykoro_pcs),
+        }
+        mesh_items = {
+            "cdmesh_6_150": float(mesh_sheets),
+            "tie_wire_band5_350": float(tie_kg),
+            "conc_sykoro_4x5x6": float(sykoro_pcs),
+        }
 
-        # 2) 前回だけにあって今回なくなった品をクリア
-        for iid in set(prev.keys()) - set(new_items.keys()):
-            cur    = float(S["qty"].get(iid, 0.0))
-            prev_q = float(prev.get(iid, 0.0))
-            nxt    = cur - prev_q
-            if nxt <= 0:
-                S["qty"].pop(iid, None)
-                S["selected"].discard(iid)
-            else:
-                S["qty"][iid] = nxt
-                S["selected"].add(iid)
-
-        # 3) 今回を記録
-        AI[mode] = dict(new_items)
-
-    # ---- 今回の自動投入数量（※この時点で total_m / tie_kg / sykoro_pcs / mesh_sheets は計算済み）----
-    rebar_items = {
-        rebar_choice[0]: float(total_m),        # 鉄筋 m
-        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
-        "conc_sykoro_4x5x6": float(sykoro_pcs), # サイコロ 個
-    }
-    mesh_items = {
-        "cdmesh_6_150": float(mesh_sheets),     # メッシュ 枚
-        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
-        "conc_sykoro_4x5x6": float(sykoro_pcs), # サイコロ 個
-    }
-
-    changed = False
-    if add_rebar:
-        apply_mode("rebar", rebar_items)
-        st.success("鉄筋方式をカートに上書き反映しました。")
-        changed = True
-    if add_mesh:
-        apply_mode("mesh", mesh_items)
-        st.success("メッシュ方式をカートに上書き反映しました。")
-        changed = True
-
-    if changed:
-        st.rerun()
-
+        # 排他的に上書き
+        if mode == "鉄筋方式":
+            apply_mode("mesh", {})           # メッシュをクリア
+            apply_mode("rebar", rebar_items)
+            st.success("鉄筋方式をカートに上書きしました。"); st.rerun()
+        elif mode == "メッシュ方式":
+            apply_mode("rebar", {})          # 鉄筋をクリア
+            apply_mode("mesh", mesh_items)
+            st.success("メッシュ方式をカートに上書きしました。"); st.rerun()
 
 
 # -------------------------------------
