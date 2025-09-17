@@ -311,15 +311,45 @@ st.download_button("↓ 採用単価CSVをダウンロード", data=exp_csv, fil
 
 st.caption("© VELOBI Cost — 商品→単価→仕入先履歴の順に管理。ヴェロビ思想：入力最小／内部で安全に補正／一貫フォーマット出力。")
 
-# ← 型違いで消えない問題を根絶（int64に強制）
-del_ids = pd.to_numeric(
-    del_table.loc[del_table["削除"]==True, "ID"], errors="coerce"
+# ===============================
+# 履歴の選択削除（任意・安全動作）
+# ===============================
+st.markdown("---")
+st.subheader("履歴の選択削除（任意）")
+
+# セッション上の生データをテーブル化（行ID付き）
+_del_src = st.session_state["prices_raw"].copy().reset_index().rename(columns={"index":"rec_id"})
+_del_src["削除"] = False
+
+# 表示列を絞ってデータエディタへ（チェックで削除対象を選ぶ）
+_del_view = _del_src[[
+    "削除","rec_id","date","vendor","item_id","invoice_unit","unit_price",
+    "qty_per_invoice_unit","standard","diameter","source"
+]]
+
+edited = st.data_editor(
+    _del_view,
+    use_container_width=True,
+    hide_index=True,
+    num_rows="dynamic",
+    key="delete_editor"
+)
+
+# チェックされた rec_id を抽出
+_del_ids = pd.to_numeric(
+    edited.loc[edited["削除"] == True, "rec_id"], errors="coerce"
 ).dropna().astype("int64").tolist()
-        if len(del_ids)==0:
-            st.warning("削除対象が選ばれていません。")
-        else:
-            df["ID"] = _safe_numeric(df["ID"], "int")  # 念のため
-            df = df[~df["ID"].isin(del_ids)].copy()
-            save_df(df)
-            st.success(f"{len(del_ids)} 行を削除しました。")
-            st.rerun()
+
+col_del1, col_del2 = st.columns([1,3])
+if col_del1.button("✅ 選択行を削除する", use_container_width=True):
+    if len(_del_ids) == 0:
+        st.warning("削除対象が選ばれていません。")
+    else:
+        # セッション内の原票データから該当行を削除
+        _base = st.session_state["prices_raw"].copy()
+        _base = _base.drop(index=_del_ids)  # rec_id は reset_index 前の行番号
+        st.session_state["prices_raw"] = _base.reset_index(drop=True)
+        st.success(f"{len(_del_ids)} 行を削除しました。")
+        st.rerun()
+
+st.caption("※ 削除はこのアプリ内の履歴（prices_raw）に対して行われます。CSVは不要です。")
