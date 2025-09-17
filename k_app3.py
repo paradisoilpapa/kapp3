@@ -95,16 +95,19 @@ PRICES_INIT = pd.DataFrame([
     ["2025-02-18","宮田金物","course_thread_65","", "", "束",1000,50,"伝票278032"],
     ["2025-02-18","宮田金物","course_thread_75","", "", "束",1100,50,"伝票278032"],
 
-    ["2025-02-14","宮田金物","boardnail_16x32","", "", "本",6,None,"伝票2779if "pick_state" not in st.session_state:03"],
+PRICES_INIT = pd.DataFrame([
+    ...,
+    ["2025-02-14","宮田金物","boardnail_16x32","", "", "本",6,None,"伝票277903"],
 ], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
 
 # -------------------------------------
 # セッション初期化
 # -------------------------------------
-if "prices_raw" not in st.session_state:
-    st.session_state["prices_raw"] = PRICES_INIT.copy()
+if "pick_state" not in st.session_state:
+    st.session_state["pick_state"] = {"selected": set(), "qty": {}}
 
-ITEMS_D = ITEMS.to_dict(orient="index")
+# ★ auto_injected 初期化もここで
+st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
 
 # -------------------------------------
 # ユーティリティ
