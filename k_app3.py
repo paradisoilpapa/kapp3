@@ -259,97 +259,64 @@ for item_id, meta in ITEMS_D.items():
             st.dataframe(show, use_container_width=True, height=260)
 
 # ===============================
-# 伝票入力（追加登録）
+# かんたん見積（商品 × 数量 → 金額）
 # ===============================
 st.markdown("---")
-st.subheader("伝票入力（価格履歴の追加）")
-with st.form("invoice_add"):
-    c1, c2, c3 = st.columns(3)
-    d = c1.date_input("日付", value=date.today())
-    vendor = c2.text_input("仕入先", value="宮田金物")
-    item_sel = c3.selectbox("商品", list(ITEMS_D.keys()), format_func=lambda i: f"{ITEMS_D[i]['name']}｜{ITEMS_D[i]['spec']}（{i}）")
+st.subheader("かんたん見積（商品 × 数量 → 金額）")
 
-    c4, c5, c6 = st.columns(3)
-    inv_unit = c4.selectbox("伝票単位", ["kg","m","本","箱","束","枚","個"], index=0)
-    unit_price = c5.number_input("単価（伝票単位あたり）", min_value=0.0, step=1.0)
-    qty_per = c6.number_input("入数（箱/束など）", min_value=0.0, step=1.0, value=0.0)
+# 採用ポリシーで確定した単価を使用（TABLEは既にその状態）
+_cart_src = TABLE[["商品ID","商品名","規格/仕様","基準単位","◎ 採用単価"]].copy()
+_cart_src.rename(columns={"◎ 採用単価":"単価（基準単位）"}, inplace=True)
+_cart_src["数量"] = 0.0  # 入力用
 
-    c7, c8, c9 = st.columns(3)
-    standard = c7.text_input("規格（例：SD295A / 無規格）")
-    diameter = c8.text_input("径（例：D10、鉄筋のみ）")
-    source = c9.text_input("伝票番号/備考")
-
-    submitted = st.form_submit_button("この内容で履歴に追加する")
-    if submitted:
-        new_row = {
-            "date": pd.to_datetime(d),
-            "vendor": vendor,
-            "item_id": item_sel,
-            "standard": standard,
-            "diameter": diameter,
-            "invoice_unit": inv_unit,
-            "unit_price": unit_price,
-            "qty_per_invoice_unit": (None if qty_per==0 else qty_per),
-            "source": source,
-        }
-        st.session_state["prices_raw"] = pd.concat([st.session_state["prices_raw"], pd.DataFrame([new_row])], ignore_index=True)
-        st.success("履歴を追加しました。上の表が更新されています。")
-
-# ===============================
-# エクスポート（任意）：採用単価のスナップショット
-# ===============================
-st.markdown("---")
-st.subheader("採用単価スナップショット（任意）")
-st.caption("※ 再現性のため、必要に応じてCSVでエクスポートできます（閲覧のみでOK）。")
-exp = TABLE.copy()
-exp.rename(columns={
-    "商品ID":"item_id","カテゴリ":"category","商品名":"name","規格/仕様":"spec","基準単位":"base_unit",
-    "◎ 採用単価":"adopt_price","〇 最新単価":"latest_price","▲ 期間平均":"avg_price","採用注記":"adopt_note"
-}, inplace=True)
-exp_csv = exp.to_csv(index=False).encode("utf-8-sig")
-st.download_button("↓ 採用単価CSVをダウンロード", data=exp_csv, file_name=f"adopt_prices_{datetime.now():%Y%m%d}.csv", mime="text/csv")
-
-st.caption("© VELOBI Cost — 商品→単価→仕入先履歴の順に管理。ヴェロビ思想：入力最小／内部で安全に補正／一貫フォーマット出力。")
-
-# ===============================
-# 履歴の選択削除（任意・安全動作）
-# ===============================
-st.markdown("---")
-st.subheader("履歴の選択削除（任意）")
-
-# セッション上の生データをテーブル化（行ID付き）
-_del_src = st.session_state["prices_raw"].copy().reset_index().rename(columns={"index":"rec_id"})
-_del_src["削除"] = False
-
-# 表示列を絞ってデータエディタへ（チェックで削除対象を選ぶ）
-_del_view = _del_src[[
-    "削除","rec_id","date","vendor","item_id","invoice_unit","unit_price",
-    "qty_per_invoice_unit","standard","diameter","source"
-]]
-
-edited = st.data_editor(
-    _del_view,
+edited_cart = st.data_editor(
+    _cart_src,
     use_container_width=True,
     hide_index=True,
-    num_rows="dynamic",
-    key="delete_editor"
+    num_rows="fixed",  # 行を固定（追加・削除なし）
+    key="easy_quote_editor"
 )
 
-# チェックされた rec_id を抽出
-_del_ids = pd.to_numeric(
-    edited.loc[edited["削除"] == True, "rec_id"], errors="coerce"
-).dropna().astype("int64").tolist()
+# 小計・合計
+calc = edited_cart.copy()
+calc["小計（税抜）"] = calc["数量"] * calc["単価（基準単位）"]
+quote = calc[calc["数量"] > 0].reset_index(drop=True)
 
-col_del1, col_del2 = st.columns([1,3])
-if col_del1.button("✅ 選択行を削除する", use_container_width=True):
-    if len(_del_ids) == 0:
-        st.warning("削除対象が選ばれていません。")
-    else:
-        # セッション内の原票データから該当行を削除
-        _base = st.session_state["prices_raw"].copy()
-        _base = _base.drop(index=_del_ids)  # rec_id は reset_index 前の行番号
-        st.session_state["prices_raw"] = _base.reset_index(drop=True)
-        st.success(f"{len(_del_ids)} 行を削除しました。")
-        st.rerun()
+col_q1, col_q2, col_q3 = st.columns(3)
+tax_rate = col_q1.number_input("消費税率(%)", min_value=0.0, max_value=100.0, value=10.0, step=0.1)
+rounding = col_q2.selectbox("端数処理", ["四捨五入","切り上げ","切り捨て"], index=0)
+show_zero = col_q3.checkbox("数量0も表示", value=False)
 
-st.caption("※ 削除はこのアプリ内の履歴（prices_raw）に対して行われます。CSVは不要です。")
+if not show_zero:
+    view_df = quote.copy()
+else:
+    view_df = calc.copy()
+
+st.dataframe(view_df, use_container_width=True, height=300)
+
+subtotal = float(quote["小計（税抜）"].sum()) if not quote.empty else 0.0
+tax = subtotal * tax_rate / 100.0
+
+# 端数処理
+def _round(x):
+    if rounding == "四捨五入":
+        return float(np.round(x, 0))
+    if rounding == "切り上げ":
+        return float(np.ceil(x))
+    return float(np.floor(x))
+
+tax = _round(tax)
+grand = _round(subtotal + tax)
+
+m1, m2, m3 = st.columns(3)
+m1.metric("小計（税抜）", f"{subtotal:,.0f} 円")
+m2.metric(f"消費税（{tax_rate:.1f}%）", f"{tax:,.0f} 円")
+m3.metric("合計（税込）", f"{grand:,.0f} 円")
+
+# 見積明細のエクスポート（任意）
+if not quote.empty:
+    export_cols = ["商品ID","商品名","規格/仕様","基準単位","単価（基準単位）","数量","小計（税抜）"]
+    csv_quote = quote[export_cols].to_csv(index=False).encode("utf-8-sig")
+    st.download_button("↓ この見積明細をCSVでダウンロード", data=csv_quote,
+                       file_name=f"easy_quote_{datetime.now():%Y%m%d}.csv", mime="text/csv")
+
