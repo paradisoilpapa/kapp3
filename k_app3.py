@@ -1,312 +1,316 @@
 # -*- coding: utf-8 -*-
-import streamlit as st
+"""
+原価管理MVP｜商品主軸表示（ヴェロビ式）
+- CSV不要。初期データをコード内に同梱。
+- 商品→採用単価（◎）/ 最新（〇）/ 平均（▲）を表示。
+- 履歴は仕入先ごとに展開表示。
+- 単価入力フォームで伝票を追記可能（再現性のためアプリ内で一元管理）。
+
+使い方：
+$ streamlit run app.py
+"""
+import math
+from datetime import date, datetime
 import pandas as pd
 import numpy as np
-from datetime import date
-from pathlib import Path
+import streamlit as st
 
-# ============ 基本設定 ============
-st.set_page_config(page_title="競輪ログ（手入力・編集保存・複数削除・会場プリセット）", layout="centered")
-CSV_PATH = Path("keirin_logs.csv")
-COLUMNS = ["ID","日付","場","R","券種","買い目","投資","払戻","オッズ","的中"]
+st.set_page_config(page_title="原価管理MVP（商品主軸・宮田金物 初期登録）", layout="wide")
+st.title("原価管理MVP｜商品主軸・宮田金物 初期登録版")
 
-VENUES = sorted(set([
-    "いわき平","京王閣","取手","宇都宮","前橋","西武園","大宮","弥彦","松戸","千葉",
-    "川崎","平塚","小田原","伊東温泉","静岡","名古屋","岐阜","大垣","豊橋","四日市",
-    "松阪","奈良","向日町（京都向日町）","岸和田","和歌山","玉野","広島","防府","高松",
-    "小松島","高知","松山","佐世保","久留米","小倉","別府","熊本","武雄","青森","函館",
-    "福井","富山"
-]))
-BET_TYPES = ["二車複","ワイド","三連複","二車単","三連単"]
+# ===============================
+# 初期データ（同梱）
+# ===============================
+ITEMS = pd.DataFrame([
+    ["rebar_D10_NA","鉄筋","異径鋼","D10 無規格","m",None],
+    ["rebar_D10_SD295A","鉄筋","異径鋼","SD295A D10","m",None],
+    ["rebar_D13_SD295A","鉄筋","異径鋼","SD295A D13","m",None],
+    ["rebar_D16_SD345","鉄筋","異径鋼","SD345 D16","m",None],
+    ["cdmesh_6_150","鉄筋副材","CDメッシュ","6mm×150目","枚",None],
+    ["tie_wire_band5_350","副資材","結束線","バンディ#5 350mm","kg",None],
+    ["tie_wire_black5_300","副資材","結束線","ブラックバンディ#5 300mm","kg",None],
+    ["mokkons_B200","型枠","丸セパ(5/16)","モッコンB200","本",None],
+    ["anchor_btn_1_2x240","金物","アンカーBTN","1/2×240","本",None],
+    ["conc_sykoro_4x5x6","基礎副材","コンクリートサイコロ","4×5×6","個",None],
+    ["conpa_screw_35","金物","コンパネビス","35mm","本",1000],  # 1箱=1000本
+    ["nut_chrome_M12","金物","ナット（クロメート）","M12","個",None],
+    ["nut_zinc_1_2","金物","ナット（メッキ）","1/2","個",None],
+    ["washer_zinc_1_2","金物","座金（メッキ）","1/2","個",None],
+    ["washer_zinc_16mm","金物","座金（メッキ）","16mm","個",None],
+    ["boardnail_16x32","消耗品","ボード釘","#16×32","本",None],
+    ["paint_tough_red","塗装材","タフペイント","赤","本",None],
+    ["paint_tough_white","塗装材","タフペイント","白","本",None],
+    ["paint_tough_yellow","塗装材","タフペイント","黄","本",None],
+    ["course_thread_65","金物","コーススレッド（皿）","65mm","本",50],   # 1束=50本
+    ["course_thread_75","金物","コーススレッド（皿）","75mm","本",50],
+    ["plast_hollow_menboku_15","型枠","プラスチック中空面木","15mm","本",None],
+    ["plast_hollow_menboku_20","型枠","プラスチック中空面木","20mm","本",None],
+    ["plast_hollow_menboku_30","型枠","プラスチック中空面木","30mm","本",None],
+], columns=["item_id","category","name","spec","base_unit","units_per_box"]).set_index("item_id")
 
-# ============ ユーティリティ ============
-def _safe_numeric(s, kind="int"):
-    if kind == "int":
-        return pd.to_numeric(s, errors="coerce").fillna(0).astype("int64")
-    if kind == "float":
-        return pd.to_numeric(s, errors="coerce")
-    raise ValueError
+# 径→kg/m（JISの実務値）
+REBAR_KG_PER_M = {
+    "D6":0.222,"D10":0.617,"D13":0.995,"D16":1.560,"D19":2.250,
+    "D22":2.980,"D25":3.980,"D29":5.040,"D32":6.350,"D35":7.990,
+    "D38":9.860,"D41":11.90,
+}
 
-def _str_strip(s):
-    return s.astype(str).str.strip()
+# 価格履歴（宮田金物）
+PRICES_INIT = pd.DataFrame([
+    ["2025-03-21","宮田金物","rebar_D10_SD295A","SD295A","D10","kg",141,None,"伝票279300"],
+    ["2025-03-21","宮田金物","rebar_D13_SD295A","SD295A","D13","kg",139,None,"伝票279300"],
+    ["2025-03-21","宮田金物","rebar_D10_NA","無規格","D10","kg",139,None,"伝票272xxx"],
+    ["2025-02-28","宮田金物","rebar_D10_NA","無規格","D10","kg",138,None,"伝票272896"],
+    ["2024-11-30","宮田金物","rebar_D16_SD345","SD345","D16","kg",139,None,"伝票279458"],
+    ["2024-10-31","宮田金物","rebar_D16_SD345","SD345","D16","kg",134,None,"伝票273079"],
 
-def load_df()->pd.DataFrame:
-    if CSV_PATH.exists():
-        df = pd.read_csv(CSV_PATH, dtype=str)
-    else:
-        df = pd.DataFrame(columns=COLUMNS, dtype=object)
-    for c in COLUMNS:
-        if c not in df.columns:
-            df[c] = "" if c not in ["ID","投資","払戻","オッズ","的中"] else 0
+    ["2024-11-30","宮田金物","cdmesh_6_150","", "", "枚",1300,None,"伝票279192"],
 
-    df["ID"]   = _safe_numeric(df["ID"], "int")
-    df["投資"] = _safe_numeric(df["投資"], "int")
-    df["払戻"] = _safe_numeric(df["払戻"], "int")
-    df["オッズ"]= _safe_numeric(df["オッズ"],"float")
-    df["的中"] = _safe_numeric(df["的中"], "int")
-    df["的中"] = np.where(df["払戻"]>0, 1, df["的中"])
-    for c in ["日付","場","R","券種","買い目"]:
-        df[c] = _str_strip(df[c])
+    ["2025-02-28","宮田金物","tie_wire_band5_350","", "", "kg",290,None,"伝票279150"],
+    ["2024-09-30","宮田金物","tie_wire_band5_350","", "", "kg",260,None,"伝票272896"],
+    ["2025-03-31","宮田金物","tie_wire_black5_300","", "", "kg",290,None,"伝票279458"],
 
-    # ID振り直し（0が残っていたら採番）
-    if (df["ID"]==0).any():
-        mx = int(df["ID"].max()) if len(df) else 0
-        need = df["ID"]==0
-        cnt = int(need.sum())
-        df.loc[need,"ID"] = range(mx+1, mx+1+cnt)
+    ["2024-12-18","宮田金物","mokkons_B200","", "", "本",23,None,"伝票275954"],
+    ["2025-03-21","宮田金物","mokkons_B200","", "", "本",25,None,"伝票279300"],
 
-    # ID重複があればユニーク化
-    if df["ID"].duplicated().any():
-        used = set()
-        cur_max = int(df["ID"].max()) if len(df) else 0
-        ids = []
-        for v in df["ID"]:
-            v = int(v)
-            if v in used:
-                cur_max += 1
-                ids.append(cur_max)
-            else:
-                ids.append(v); used.add(v)
-        df["ID"] = ids
+    ["2024-11-18","宮田金物","anchor_btn_1_2x240","", "", "本",150,None,"伝票275036"],
 
-    return df[COLUMNS].copy()
+    ["2025-02-14","宮田金物","conc_sykoro_4x5x6","", "", "個",25,None,"伝票277903"],
 
-def save_df(df:pd.DataFrame):
-    out = df.copy()
-    out["ID"]=_safe_numeric(out["ID"],"int")
-    out["投資"]=_safe_numeric(out["投資"],"int")
-    out["払戻"]=_safe_numeric(out["払戻"],"int")
-    out["オッズ"]=_safe_numeric(out["オッズ"],"float")
-    out["的中"]=_safe_numeric(out["的中"],"int")
-    out.to_csv(CSV_PATH, index=False)
+    ["2025-03-26","宮田金物","conpa_screw_35","", "", "箱",2500,1000,"伝票279290"],
+    ["2025-02-10","宮田金物","conpa_screw_35","", "", "箱",2200,1000,"伝票277660"],
 
-def next_id(df:pd.DataFrame)->int:
-    return int(df["ID"].max())+1 if len(df) else 1
+    ["2024-11-18","宮田金物","nut_chrome_M12","", "", "個",14,None,"伝票275036"],
+    ["2025-03-27","宮田金物","nut_zinc_1_2","", "", "個",13,None,"伝票279394"],
+    ["2025-03-27","宮田金物","washer_zinc_1_2","", "", "個",17,None,"伝票279394"],
+    ["2024-11-18","宮田金物","washer_zinc_16mm","", "", "個",15,None,"伝票275036"],
 
-def get_date_bounds(df:pd.DataFrame):
-    if len(df)==0 or (df["日付"]=="").all():
-        t=pd.to_datetime(date.today()); return t,t
-    s=pd.to_datetime(df.loc[df["日付"]!="","日付"], errors="coerce").dropna()
-    if len(s)==0:
-        t=pd.to_datetime(date.today()); return t,t
-    return s.min(), s.max()
+    ["2025-02-18","宮田金物","paint_tough_white","", "", "本",220,None,"伝票278032"],
+    ["2025-02-18","宮田金物","paint_tough_red","", "", "本",220,None,"伝票278032"],
+    ["2025-02-14","宮田金物","paint_tough_yellow","", "", "本",220,None,"伝票277903"],
 
-# ============ データ ============
-df = load_df()
-st.title("競輪ログ（手入力・編集保存・複数削除・会場プリセット）")
+    ["2025-02-18","宮田金物","course_thread_65","", "", "束",1000,50,"伝票278032"],
+    ["2025-02-18","宮田金物","course_thread_75","", "", "束",1100,50,"伝票278032"],
 
-# ============ 1) 手入力追加 ============
-with st.form("manual_input", clear_on_submit=True):
-    st.subheader("1) レースを追加（手入力）")
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        in_date = st.date_input("日付", value=date.today())
-        venue_choice = st.selectbox("場（プリセット）", ["手入力に切替"]+VENUES, index=0)
-        in_place = st.text_input("場（自由入力）", "") if venue_choice=="手入力に切替" else venue_choice
-        in_r = st.text_input("R（数字）", "", placeholder="例：4")
-    with c2:
-        in_kind = st.selectbox("券種", BET_TYPES, index=0)
-        in_comb = st.text_input("買い目", "", placeholder="例：1-7 / 1-6 / 1-7-2")
-        default_map={"ワイド":100,"二車複":200,"二車単":200,"三連複":300,"三連単":300}
-        in_stake = st.number_input("投資(円)", 0, 1_000_000, default_map.get(in_kind,100), 100)
-    with c3:
-        in_pay = st.number_input("払戻(円)", 0, 10_000_000, 0, 100)
-        in_odds = st.text_input("オッズ（任意）", "", placeholder="例：8.9")
-    if st.form_submit_button("追加"):
-        if not str(in_place).strip():
-            st.error("「場」を入力してください。")
-        elif not str(in_r).strip().isdigit():
-            st.error("「R」は数字で入力してください。")
-        elif not str(in_comb).strip():
-            st.error("「買い目」を入力してください。")
-        else:
-            row = {
-                "ID": next_id(df),
-                "日付": str(in_date),
-                "場": str(in_place).strip(),
-                "R": str(in_r).strip(),
-                "券種": in_kind,
-                "買い目": str(in_comb).strip(),
-                "投資": int(in_stake),
-                "払戻": int(in_pay),
-                "オッズ": (float(in_odds) if str(in_odds).strip()!="" else np.nan),
-                "的中": 1 if int(in_pay)>0 else 0,
-            }
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            save_df(df)
-            st.success("追加しました。")
+    ["2025-02-14","宮田金物","boardnail_16x32","", "", "本",6,None,"伝票277903"],
+], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
 
-# ============ 2) 総合メトリクス ============
-if len(df)==0:
-    st.info("まだデータがありません。上のフォームから追加してください。")
-else:
-    df["投資"]=_safe_numeric(df["投資"],"int")
-    df["払戻"]=_safe_numeric(df["払戻"],"int")
-    df["オッズ"]=_safe_numeric(df["オッズ"],"float")
-    df["的中"]=_safe_numeric(df["的中"],"int")
+# ===============================
+# セッション初期化
+# ===============================
+if "prices_raw" not in st.session_state:
+    st.session_state["prices_raw"] = PRICES_INIT.copy()
 
-    total_bet=int(df["投資"].sum())
-    total_ret=int(df["払戻"].sum())
-    hits=int(df["的中"].sum())
-    trials=len(df)
-    roi=(total_ret/total_bet*100.0) if total_bet>0 else 0.0
+# 商品辞書
+ITEMS_D = ITEMS.to_dict(orient="index")
 
-    a,b,c,d=st.columns(4)
-    a.metric("累計 投資", f"{total_bet:,} 円")
-    b.metric("累計 払戻", f"{total_ret:,} 円")
-    c.metric("累計 回収率", f"{roi:.2f} %")
-    d.metric("的中数 / レース", f"{hits}/{trials}")
-
-    # -------- 3) 券種別集計 --------
-    st.subheader("2) 券種別集計")
-    by_kind=df.groupby("券種", dropna=False).agg(
-        投資=("投資","sum"), 払戻=("払戻","sum"), 的中=("的中","sum"), 本数=("買い目","count")
-    ).reset_index()
-    by_kind["回収率%"]=np.where(by_kind["投資"]>0,(by_kind["払戻"]/by_kind["投資"]*100).round(2),0.0)
-    by_kind["的中率%"]=np.where(by_kind["本数"]>0,(by_kind["的中"]/by_kind["本数"]*100).round(2),0.0)
-    st.dataframe(by_kind, use_container_width=True)
-
-    # -------- 4) 明細（期間・券種・会場でフィルタ） --------
-    st.subheader("3) 明細（期間・券種・会場でフィルタ）")
-    dmin,dmax=get_date_bounds(df)
-    dmin=dmin.to_pydatetime().date(); dmax=dmax.to_pydatetime().date()
-    with st.expander("フィルタ", expanded=True):
-        x,y=st.columns(2)
-        with x:
-            date_from=st.date_input("日付From", value=dmin)
-        with y:
-            date_to=st.date_input("日付To", value=dmax)
-        st.write("券種フィルタ（OFFで除外）")
-        kind_checks={k: st.checkbox(k, value=True) for k in BET_TYPES}
-        st.write("会場フィルタ（選択が空なら全件）")
-        venue_selected=st.multiselect("会場を選択", options=VENUES, default=[])
-    q=df.copy()
-    q=q[(q["日付"]>=str(date_from))&(q["日付"]<=str(date_to))]
-    kinds_on=[k for k,v in kind_checks.items() if v]
-    if kinds_on: q=q[q["券種"].isin(kinds_on)]
-    if len(venue_selected)>0: q=q[q["場"].isin(venue_selected)]
-    q["行回収率%"]=np.where(
-        _safe_numeric(q["投資"],"int")>0,
-        (_safe_numeric(q["払戻"],"int")/np.where(_safe_numeric(q["投資"],"int")==0,1,_safe_numeric(q["投資"],"int"))*100).round(2),
-        0.0
-    )
-    q=q.sort_values(["日付","場","R","ID"]).reset_index(drop=True)
-    st.dataframe(q, use_container_width=True)
-
-    # -------- 3.5) 会場別 × 券種 集計（フィルタ結果） --------
-    st.subheader("3.5) 会場別 × 券種 集計")
-    base=q.copy()
-    base["場"]=base["場"].astype(str).str.strip().replace({"":"不明"})
-    base["券種"]=base["券種"].astype(str).str.strip()
-    base["投資"]=_safe_numeric(base["投資"],"int")
-    base["払戻"]=_safe_numeric(base["払戻"],"int")
-    base["的中"]=_safe_numeric(base["的中"],"int")
-
-    if len(base)==0:
-        st.info("フィルタ結果が空です。")
-    else:
-        by_place_kind=base.groupby(["場","券種"], dropna=False).agg(
-            投資=("投資","sum"), 払戻=("払戻","sum"), 的中=("的中","sum"), 本数=("買い目","count")
-        ).reset_index()
-        by_place_kind["回収率%"]=np.where(by_place_kind["投資"]>0,(by_place_kind["払戻"]/by_place_kind["投資"]*100).round(2),0.0)
-        by_place_kind["的中率%"]=np.where(by_place_kind["本数"]>0,(by_place_kind["的中"]/by_place_kind["本数"]*100).round(2),0.0)
-        st.markdown("**会場×券種（ロングテーブル）**")
-        st.dataframe(by_place_kind.sort_values(["回収率%","本数"], ascending=[False,False]), use_container_width=True)
-
-        st.markdown("**会場ごとの券種別指標（横持ち）**")
-        pv=by_place_kind.pivot_table(
-            index="場", columns="券種",
-            values=["投資","払戻","回収率%","的中率%"],
-            aggfunc="first", observed=False
-        ).fillna(0)
-
-        # ←← ここから安全化（KeyError対策） →→
-        # インデックス名がNoneでも '場' 列として復元
-        if pv.index.name is None:
-            pv.index.name = "場"
-        pv = pv.rename_axis(index="場").reset_index()
-
-        # MultiIndex列をフラット化
-        def _flat(cols):
-            out=[]
-            for c in cols:
-                if isinstance(c, tuple): out.append(f"{c[0]}_{c[1]}")
-                else: out.append(str(c))
-            return out
-        pv.columns=_flat(pv.columns)
-
-        # まれに '場' 列名が 'index' や 'level_0' になる環境がある → 強制リネーム
-        if "場" not in pv.columns:
-            for cand in ["index","level_0"]:
-                if cand in pv.columns:
-                    pv.rename(columns={cand:"場"}, inplace=True)
-                    break
-
-        pv["場"]=pv["場"].astype(str)
-
-        # トータルは map で安全に付与（merge 不使用）
-        tot=base.groupby("場", dropna=False).agg(総投資=("投資","sum"), 総払戻=("払戻","sum")).reset_index()
-        tot["総回収率%"]=np.where(tot["総投資"]>0,(tot["総払戻"]/tot["総投資"]*100).round(2),0.0)
-        idx=tot.set_index("場")
-        pv["総投資"]=pv["場"].map(idx["総投資"]).fillna(0)
-        pv["総払戻"]=pv["場"].map(idx["総払戻"]).fillna(0)
-        pv["総回収率%"]=pv["場"].map(idx["総回収率%"]).fillna(0)
-        pv=pv.sort_values("総回収率%", ascending=False)
-        # ←← ここまで安全化 →→
-
-        st.dataframe(pv, use_container_width=True)
-
-    # -------- 5) 既存データの編集（表で直接 → 保存） --------
-    st.subheader("4) 既存データの編集（直接書き換え → 保存）")
-    edit_view=df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
+# ===============================
+# ユーティリティ
+# ===============================
+def parse_date(x):
     try:
-        col_config={
-            "ID": st.column_config.NumberColumn("ID", help="永続ID（基本は編集しない）"),
-            "投資": st.column_config.NumberColumn("投資", step=100),
-            "払戻": st.column_config.NumberColumn("払戻", step=100),
-            "オッズ": st.column_config.NumberColumn("オッズ", step=0.1),
-            "的中": st.column_config.NumberColumn("的中", help="0/1。払戻>0なら保存時に1へ更新"),
-            "券種": st.column_config.SelectboxColumn("券種", options=BET_TYPES),
-        }
+        return pd.to_datetime(x).date()
     except Exception:
-        col_config={
-            "ID": st.column_config.NumberColumn("ID", help="永続ID（基本は編集しない）"),
-            "投資": st.column_config.NumberColumn("投資", step=100),
-            "払戻": st.column_config.NumberColumn("払戻", step=100),
-            "オッズ": st.column_config.NumberColumn("オッズ", step=0.1),
-            "的中": st.column_config.NumberColumn("的中", help="0/1。払戻>0なら保存時に1へ更新"),
+        return None
+
+def base_unit(item_id):
+    return ITEMS_D[item_id]["base_unit"]
+
+def units_per_box(item_id):
+    return ITEMS_D[item_id]["units_per_box"]
+
+def is_rebar(item_id):
+    return ITEMS_D[item_id]["category"] == "鉄筋" and ITEMS_D[item_id]["base_unit"] == "m"
+
+# 単価をベース単位へ正規化
+# - 鉄筋(m基準): kg単価→m単価に換算（円/m=円/kg×kg/m）
+# - 箱/束売り: 1箱(束)あたり本数で按分
+# - 同一単位はそのまま
+
+def normalize_price(row):
+    item_id = row["item_id"]
+    inv_unit = str(row["invoice_unit"]) if row["invoice_unit"] is not None else ""
+    price = float(row["unit_price"]) if row["unit_price"] is not None else np.nan
+    qpu = row["qty_per_invoice_unit"]  # e.g., 箱入数 or 束入数
+
+    bunit = base_unit(item_id)
+
+    # 箱・束 → 本に按分（商品固有の箱入数/束入数を優先、なければqty_per_invoice_unit）
+    if inv_unit in ("箱","束"):
+        n = units_per_box(item_id) or qpu
+        if n and float(n) > 0:
+            price = price / float(n)
+            inv_unit = "本"
+
+    # 鉄筋：kg→m
+    if is_rebar(item_id):
+        dia = str(row.get("diameter") or "")
+        if inv_unit == "kg" and dia in REBAR_KG_PER_M:
+            kgpm = REBAR_KG_PER_M[dia]
+            return price * kgpm, f"kg→m換算 ×{kgpm}kg/m"
+        elif inv_unit == "m":
+            return price, "m単価"
+        else:
+            return np.nan, f"未対応({inv_unit})"
+
+    # 非鉄筋：単位をベースへ（同一ならそのまま）
+    if inv_unit == bunit:
+        return price, f"{bunit}単価"
+
+    # 例：箱/束が上で本になっていれば、base_unitが本ならOK
+    if inv_unit == "本" and bunit == "本":
+        return price, "本単価(按分済)"
+
+    return np.nan, f"未対応({inv_unit}→{bunit})"
+
+
+def adopt_price(group_df, policy):
+    """ポリシー別に採用単価を決定。返り値: price, label, picked_row"""
+    df = group_df.dropna(subset=["price_per_base"])  # 正規化済
+    if df.empty:
+        return np.nan, "データなし", None
+
+    if policy == "高い方（値上がり優先）":
+        idx = df["price_per_base"].idxmax()
+        r = df.loc[idx]
+        return float(r["price_per_base"]), f"高値採用｜{r['vendor']}｜{r['date'].date()}｜{r['source']}", r
+    elif policy == "最新日付":
+        lastd = df["date"].max()
+        last = df[df["date"]==lastd]
+        idx = last["price_per_base"].idxmax()  # 同日複数なら高い方
+        r = last.loc[idx]
+        return float(r["price_per_base"]), f"最新採用｜{r['vendor']}｜{r['date'].date()}｜{r['source']}", r
+    else:  # 期間平均
+        return float(np.round(df["price_per_base"].mean(),1)), f"期間平均（{len(df)}件）", None
+
+# ===============================
+# オプション（期間 / ポリシー）
+# ===============================
+st.sidebar.header("フィルタ / 採用ポリシー")
+policy = st.sidebar.radio("採用ポリシー", ["高い方（値上がり優先）","最新日付","期間平均"], index=0)
+
+raw = st.session_state["prices_raw"].copy()
+raw["date"] = pd.to_datetime(raw["date"], errors="coerce")
+
+c1, c2 = st.sidebar.columns(2)
+min_d = raw["date"].min() if raw["date"].notna().any() else pd.to_datetime("2025-01-01")
+max_d = raw["date"].max() if raw["date"].notna().any() else pd.to_datetime("2025-12-31")
+start = c1.date_input("開始日", value=min_d.date() if not pd.isna(min_d) else date.today())
+end   = c2.date_input("終了日", value=max_d.date() if not pd.isna(max_d) else date.today())
+
+flt = raw[(raw["date"]>=pd.to_datetime(start)) & (raw["date"]<=pd.to_datetime(end))].copy()
+
+# 正規化
+norm_rows = []
+for i, r in flt.iterrows():
+    p, note = normalize_price(r)
+    norm_rows.append({
+        **r.to_dict(),
+        "price_per_base": np.round(p,1) if not pd.isna(p) else np.nan,
+        "detail": note
+    })
+NORM = pd.DataFrame(norm_rows)
+
+# ===============================
+# 商品主軸：◎〇▲ と履歴
+# ===============================
+st.markdown("### 商品一覧（商品→採用単価→履歴の順に表示）")
+
+records = []
+for item_id, meta in ITEMS_D.items():
+    g = NORM[NORM["item_id"]==item_id]
+    # ◎採用
+    price_adopt, note_adopt, picked = adopt_price(g, policy)
+    # 〇最新
+    price_latest, note_latest, _ = adopt_price(g, "最新日付")
+    # ▲平均
+    price_avg, note_avg, _ = adopt_price(g, "期間平均")
+
+    records.append({
+        "商品ID": item_id,
+        "カテゴリ": meta["category"],
+        "商品名": meta["name"],
+        "規格/仕様": meta["spec"],
+        "基準単位": meta["base_unit"],
+        "◎ 採用単価": price_adopt,
+        "〇 最新単価": price_latest,
+        "▲ 期間平均": price_avg,
+        "採用注記": note_adopt,
+    })
+
+TABLE = pd.DataFrame(records).sort_values(["カテゴリ","商品名","規格/仕様"]).reset_index(drop=True)
+st.dataframe(TABLE, use_container_width=True, height=420)
+
+st.caption("※ 鉄筋は 円/kg→円/m に厳密換算。箱/束は按分し、本単価に統一。丸めは小数1位四捨五入。")
+
+# 履歴表示（商品ごとに展開）
+st.markdown("### 履歴（商品別・仕入先別）")
+for item_id, meta in ITEMS_D.items():
+    g = NORM[NORM["item_id"]==item_id].sort_values(["date","vendor"]) 
+    with st.expander(f"{meta['name']}｜{meta['spec']}（{meta['category']}）【{meta['base_unit']}】"): 
+        if g.empty:
+            st.info("履歴データがありません。")
+        else:
+            show = g[["date","vendor","invoice_unit","unit_price","qty_per_invoice_unit","standard","diameter","price_per_base","detail","source"]].copy()
+            show.rename(columns={
+                "date":"日付","vendor":"仕入先","invoice_unit":"伝票単位","unit_price":"単価","qty_per_invoice_unit":"入数",
+                "standard":"規格","diameter":"径","price_per_base":"基準単価","detail":"換算","source":"伝票"
+            }, inplace=True)
+            st.dataframe(show, use_container_width=True, height=260)
+
+# ===============================
+# 伝票入力（追加登録）
+# ===============================
+st.markdown("---")
+st.subheader("伝票入力（価格履歴の追加）")
+with st.form("invoice_add"):
+    c1, c2, c3 = st.columns(3)
+    d = c1.date_input("日付", value=date.today())
+    vendor = c2.text_input("仕入先", value="宮田金物")
+    item_sel = c3.selectbox("商品", list(ITEMS_D.keys()), format_func=lambda i: f"{ITEMS_D[i]['name']}｜{ITEMS_D[i]['spec']}（{i}）")
+
+    c4, c5, c6 = st.columns(3)
+    inv_unit = c4.selectbox("伝票単位", ["kg","m","本","箱","束","枚","個"], index=0)
+    unit_price = c5.number_input("単価（伝票単位あたり）", min_value=0.0, step=1.0)
+    qty_per = c6.number_input("入数（箱/束など）", min_value=0.0, step=1.0, value=0.0)
+
+    c7, c8, c9 = st.columns(3)
+    standard = c7.text_input("規格（例：SD295A / 無規格）")
+    diameter = c8.text_input("径（例：D10、鉄筋のみ）")
+    source = c9.text_input("伝票番号/備考")
+
+    submitted = st.form_submit_button("この内容で履歴に追加する")
+    if submitted:
+        new_row = {
+            "date": pd.to_datetime(d),
+            "vendor": vendor,
+            "item_id": item_sel,
+            "standard": standard,
+            "diameter": diameter,
+            "invoice_unit": inv_unit,
+            "unit_price": unit_price,
+            "qty_per_invoice_unit": (None if qty_per==0 else qty_per),
+            "source": source,
         }
-    edited=st.data_editor(
-        edit_view, use_container_width=True, num_rows="fixed",
-        column_config=col_config, key="editor_full",
-    )
-    if st.button("編集内容を保存"):
-        edited["ID"]=_safe_numeric(edited["ID"],"int")
-        edited["投資"]=_safe_numeric(edited["投資"],"int")
-        edited["払戻"]=_safe_numeric(edited["払戻"],"int")
-        edited["オッズ"]=_safe_numeric(edited["オッズ"],"float")
-        edited["的中"]=_safe_numeric(edited["的中"],"int")
-        edited["的中"]=np.where(edited["払戻"]>0,1,edited["的中"])
-        for c in ["日付","場","R","券種","買い目"]:
-            edited[c]=_str_strip(edited[c])
-        save_df(edited)
-        st.success("保存しました。画面を更新してください。")
+        st.session_state["prices_raw"] = pd.concat([st.session_state["prices_raw"], pd.DataFrame([new_row])], ignore_index=True)
+        st.success("履歴を追加しました。上の表が更新されています。")
 
-    # -------- 6) 複数行削除（チェック → 削除） --------
-    st.subheader("5) 複数行の削除（チェックして削除）")
-    show=df.copy().sort_values(["日付","場","R","ID"]).reset_index(drop=True)
-    show["削除"]=False
-    del_table=st.data_editor(
-        show[["削除","ID","日付","場","R","券種","買い目","投資","払戻","オッズ","的中"]],
-        use_container_width=True, num_rows="fixed",
-        column_config={
-            "削除": st.column_config.CheckboxColumn("削除", help="削除したい行にチェック"),
-            "ID": st.column_config.NumberColumn("ID", help="永続ID", disabled=True),
-        },
-        key="editor_delete",
-    )
+# ===============================
+# エクスポート（任意）：採用単価のスナップショット
+# ===============================
+st.markdown("---")
+st.subheader("採用単価スナップショット（任意）")
+st.caption("※ 再現性のため、必要に応じてCSVでエクスポートできます（閲覧のみでOK）。")
+exp = TABLE.copy()
+exp.rename(columns={
+    "商品ID":"item_id","カテゴリ":"category","商品名":"name","規格/仕様":"spec","基準単位":"base_unit",
+    "◎ 採用単価":"adopt_price","〇 最新単価":"latest_price","▲ 期間平均":"avg_price","採用注記":"adopt_note"
+}, inplace=True)
+exp_csv = exp.to_csv(index=False).encode("utf-8-sig")
+st.download_button("↓ 採用単価CSVをダウンロード", data=exp_csv, file_name=f"adopt_prices_{datetime.now():%Y%m%d}.csv", mime="text/csv")
 
-    if st.button("チェックした行を削除"):
+st.caption("© VELOBI Cost — 商品→単価→仕入先履歴の順に管理。ヴェロビ思想：入力最小／内部で安全に補正／一貫フォーマット出力。")
+
         # ← 型違いで消えない問題を根絶（int64に強制）
         del_ids = pd.to_numeric(
             del_table.loc[del_table["削除"]==True, "ID"], errors="coerce"
