@@ -471,68 +471,66 @@ if submitted:
                 "小計(円)": round(total_cost_mesh),
             })
 
-        # -----------------------
-        # 見積カート反映（非累積／上書き）
-        # -----------------------
-        S = st.session_state["pick_state"]
-        AI = st.session_state["auto_injected"]  # {"rebar": {...}, "mesh": {...}}
+       # -----------------------
+# 見積カート反映（鉄筋／メッシュ：非累積で上書き）
+# -----------------------
+S = st.session_state["pick_state"]
+AI = st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
 
-        def apply_mode(mode: str, new_items: dict):
-            """同じmode（'rebar' or 'mesh'）の前回投入分を差し戻し→今回分で上書き。
-               既存の手入力分は維持（= 現在量 - 前回自動 + 今回自動）。"""
-            prev = AI.get(mode, {}) or {}
+def apply_mode(mode: str, new_items: dict):
+    """同じmode（'rebar' or 'mesh'）の前回投入分を差し戻し→今回分で上書き。
+       既存の手入力分は維持（現在量 − 前回自動 + 今回自動）。"""
+    prev = AI.get(mode, {}) or {}
 
-            # 1) 差し戻し＆上書き
-            for iid, new_q in new_items.items():
-                cur = float(S["qty"].get(iid, 0.0))
-                prev_q = float(prev.get(iid, 0.0))
-                nxt = cur - prev_q + float(new_q)
-                if nxt <= 0:
-                    if iid in S["qty"]: S["qty"].pop(iid, None)
-                    if iid in S["selected"]: S["selected"].discard(iid)
-                else:
-                    S["qty"][iid] = nxt
-                    S["selected"].add(iid)
+    # 1) 今回のアイテムを反映（差し戻し→上書き）
+    for iid, new_q in new_items.items():
+        cur = float(S["qty"].get(iid, 0.0))
+        prev_q = float(prev.get(iid, 0.0))
+        nxt = cur - prev_q + float(new_q)
+        if nxt <= 0:
+            if iid in S["qty"]: S["qty"].pop(iid, None)
+            if iid in S["selected"]: S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt
+            S["selected"].add(iid)
 
-            # 2) 前回だけにあった品は差し戻して消す
-            for iid in set(prev.keys()) - set(new_items.keys()):
-                cur = float(S["qty"].get(iid, 0.0))
-                prev_q = float(prev.get(iid, 0.0))
-                nxt = cur - prev_q
-                if nxt <= 0:
-                    if iid in S["qty"]: S["qty"].pop(iid, None)
-                    if iid in S["selected"]: S["selected"].discard(iid)
-                else:
-                    S["qty"][iid] = nxt
-                    S["selected"].add(iid)
+    # 2) 前回にあったが今回なくなったアイテムをクリア
+    for iid in set(prev.keys()) - set(new_items.keys()):
+        cur = float(S["qty"].get(iid, 0.0))
+        prev_q = float(prev.get(iid, 0.0))
+        nxt = cur - prev_q
+        if nxt <= 0:
+            if iid in S["qty"]: S["qty"].pop(iid, None)
+            if iid in S["selected"]: S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt
+            S["selected"].add(iid)
 
-            # 3) 今回を「前回値」として記録
-            AI[mode] = dict(new_items)
+    # 3) 今回分を記録
+    AI[mode] = dict(new_items)
 
-        # 今回の自動投入数量（鉄筋 / メッシュ）
-        rebar_items = {
-            rebar_choice[0]: float(total_m),             # 鉄筋 m
-            "tie_wire_band5_350": float(tie_kg),         # 結束線 kg
-            "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個
-        }
-        mesh_items = {
-            "cdmesh_6_150": float(mesh_sheets),          # メッシュ 枚
-            "tie_wire_band5_350": float(tie_kg),         # 結束線 kg
-            "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個
-        }
+# ---- 今回の自動投入数量 ----
+rebar_items = {
+    rebar_choice[0]: float(total_m),             # 鉄筋 m
+    "tie_wire_band5_350": float(tie_kg),         # 結束線 kg
+    "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個
+}
+mesh_items = {
+    "cdmesh_6_150": float(mesh_sheets),          # メッシュ 枚
+    "tie_wire_band5_350": float(tie_kg),         # 結束線 kg
+    "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個
+}
 
-        changed = False
-        if add_rebar:
-            apply_mode("rebar", rebar_items)
-            st.success("鉄筋方式をカートに**上書き反映**しました。")
-            changed = True
-        if add_mesh:
-            apply_mode("mesh", mesh_items)
-            st.success("メッシュ方式をカートに**上書き反映**しました。")
-            changed = True
+# ---- 反映チェック ----
+if add_rebar:
+    apply_mode("rebar", rebar_items)
+    st.success("鉄筋方式をカートに反映（前回分を上書き）しました。")
+if add_mesh:
+    apply_mode("mesh", mesh_items)
+    st.success("メッシュ方式をカートに反映（前回分を上書き）しました。")
 
-        if changed:
-            st.rerun()
+st.rerun()
+
 
 
 # -------------------------------------
