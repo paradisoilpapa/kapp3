@@ -95,7 +95,7 @@ PRICES_INIT = pd.DataFrame([
     ["2025-02-18","宮田金物","course_thread_65","", "", "束",1000,50,"伝票278032"],
     ["2025-02-18","宮田金物","course_thread_75","", "", "束",1100,50,"伝票278032"],
 
-    ["2025-02-14","宮田金物","boardnail_16x32","", "", "本",6,None,"伝票277903"],
+    ["2025-02-14","宮田金物","boardnail_16x32","", "", "本",6,None,"伝票2779if "pick_state" not in st.session_state:03"],
 ], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
 
 # -------------------------------------
@@ -238,8 +238,9 @@ if "pick_state" not in st.session_state:
     st.session_state["pick_state"] = {"selected": set(), "qty": {}}
 S = st.session_state["pick_state"]
 
-# ★ここを追加（auto_injected を必ず用意）
+# ★ 追加：auto_injected を必ず用意（KeyError防止）
 st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
+
 
 
 # 上：全商品一覧（チェックだけ／数量列は出さない）
@@ -478,19 +479,19 @@ if submitted:
     # -----------------------
     # 見積カート反映（非累積／上書き）
     # -----------------------
-    S = st.session_state["pick_state"]
+    S  = st.session_state["pick_state"]
     AI = st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
 
     def apply_mode(mode: str, new_items: dict):
-        """同じmode（'rebar' or 'mesh'）の前回投入分を差し戻し→今回分で上書き。
-           手入力分は維持（現在量 − 前回自動 + 今回自動）。"""
+        """同じmode（'rebar' or 'mesh'）の前回自動投入を差し戻し→今回分で上書き。
+           手入力済みは維持（現在量 − 前回自動 + 今回自動）。"""
         prev = AI.get(mode, {}) or {}
 
         # 1) 差し戻し＆上書き
         for iid, new_q in new_items.items():
-            cur = float(S["qty"].get(iid, 0.0))
+            cur    = float(S["qty"].get(iid, 0.0))
             prev_q = float(prev.get(iid, 0.0))
-            nxt = cur - prev_q + float(new_q)
+            nxt    = cur - prev_q + float(new_q)
             if nxt <= 0:
                 S["qty"].pop(iid, None)
                 S["selected"].discard(iid)
@@ -498,11 +499,11 @@ if submitted:
                 S["qty"][iid] = nxt
                 S["selected"].add(iid)
 
-        # 2) 前回だけにあった品をクリア
+        # 2) 前回だけにあって今回なくなった品をクリア
         for iid in set(prev.keys()) - set(new_items.keys()):
-            cur = float(S["qty"].get(iid, 0.0))
+            cur    = float(S["qty"].get(iid, 0.0))
             prev_q = float(prev.get(iid, 0.0))
-            nxt = cur - prev_q
+            nxt    = cur - prev_q
             if nxt <= 0:
                 S["qty"].pop(iid, None)
                 S["selected"].discard(iid)
@@ -510,29 +511,29 @@ if submitted:
                 S["qty"][iid] = nxt
                 S["selected"].add(iid)
 
-        # 3) 今回分を記録
+        # 3) 今回を記録
         AI[mode] = dict(new_items)
 
-    # ---- 今回の自動投入数量を定義（※ここは必ず計算が終わった後なので NameError になりません）----
+    # ---- 今回の自動投入数量（※この時点で total_m / tie_kg / sykoro_pcs / mesh_sheets は計算済み）----
     rebar_items = {
-        rebar_choice[0]: float(total_m),             # 鉄筋 m（計算済み）
-        "tie_wire_band5_350": float(tie_kg),         # 結束線 kg（計算済み）
-        "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個（計算済み）
+        rebar_choice[0]: float(total_m),        # 鉄筋 m
+        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
+        "conc_sykoro_4x5x6": float(sykoro_pcs), # サイコロ 個
     }
     mesh_items = {
-        "cdmesh_6_150": float(mesh_sheets),          # メッシュ 枚（計算済み）
-        "tie_wire_band5_350": float(tie_kg),         # 結束線 kg
-        "conc_sykoro_4x5x6": float(sykoro_pcs),      # サイコロ 個
+        "cdmesh_6_150": float(mesh_sheets),     # メッシュ 枚
+        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
+        "conc_sykoro_4x5x6": float(sykoro_pcs), # サイコロ 個
     }
 
     changed = False
     if add_rebar:
         apply_mode("rebar", rebar_items)
-        st.success("鉄筋方式をカートに**上書き反映**しました。")
+        st.success("鉄筋方式をカートに上書き反映しました。")
         changed = True
     if add_mesh:
         apply_mode("mesh", mesh_items)
-        st.success("メッシュ方式をカートに**上書き反映**しました。")
+        st.success("メッシュ方式をカートに上書き反映しました。")
         changed = True
 
     if changed:
