@@ -228,66 +228,90 @@ TABLE = pd.DataFrame(records).sort_values(["カテゴリ","商品名","規格/�
 st.caption("※ 鉄筋は 円/kg→円/m に換算済。箱/束は按分して本単価に統一。丸めは小数1位四捨五入。")
 
 # -------------------------------------
-# チェック＋数量 入力（セッション保持）
+# 商品選択（上：チェックのみ）＋ 選択品の数量入力（下）
+# ー 選択・数量はセッション保持 ー
 # -------------------------------------
-st.markdown("### 商品選択と数量入力（状態保持）")
+st.markdown("### 商品選択（✔だけ）")
 
-# 1) セッション初期化：選択セット＆数量辞書
+# セッション初期化
 if "pick_state" not in st.session_state:
     st.session_state["pick_state"] = {"selected": set(), "qty": {}}
-
 S = st.session_state["pick_state"]
 
-# 2) 表示用テーブルを作成（以前の選択/数量を反映）
-table_sel = TABLE[["商品ID","カテゴリ","商品名","規格/仕様","基準単位","◎ 採用単価"]].copy()
-table_sel.rename(columns={"◎ 採用単価":"単価（基準単位）"}, inplace=True)
-table_sel.insert(0, "選択", table_sel["商品ID"].isin(S["selected"]))
-table_sel.insert(6, "数量（基準単位）", table_sel["商品ID"].map(S["qty"]).fillna(0.0))
+# 上：全商品一覧（チェックだけ／数量列は出さない）
+table_pick = TABLE[["商品ID","カテゴリ","商品名","規格/仕様","基準単位","◎ 採用単価"]].copy()
+table_pick.rename(columns={"◎ 採用単価":"単価（基準単位）"}, inplace=True)
+table_pick.insert(0, "選択", table_pick["商品ID"].isin(S["selected"]))
 
-edited = st.data_editor(
-    table_sel,
+edited_pick = st.data_editor(
+    table_pick,
     use_container_width=True,
     hide_index=True,
     num_rows="fixed",
-    key="picker_editor",
+    key="picker_only",
     column_config={
         "選択": st.column_config.CheckboxColumn("選択"),
         "単価（基準単位）": st.column_config.NumberColumn("単価（基準単位）", format="%.1f"),
-        "数量（基準単位）": st.column_config.NumberColumn("数量（基準単位）", step=1.0),
     }
 )
 
-st.caption("※ 鉄筋は基準単位= m。採用単価はサイドバーのポリシーに連動。数量は基準単位で入力。")
+# 選択状態を反映：新規に✔が付いた品は数量=1を初期セット（既存は維持）
+new_selected = set(edited_pick.loc[edited_pick["選択"] == True, "商品ID"])
+newly_added = new_selected.difference(S["selected"])
 
-# 3) セッションへ反映（ここで保持されるので再描画しても消えません）
-new_selected = set(edited.loc[edited["選択"] == True, "商品ID"])
-new_qty = {row["商品ID"]: float(row["数量（基準単位）"])
-           for _, row in edited.iterrows() if row["数量（基準単位）"] > 0}
+qty = dict(S["qty"])
+for iid in newly_added:
+    if iid not in qty or qty[iid] <= 0:
+        qty[iid] = 1.0  # 初期値
+
+# ✔が外れた品は数量も削除してスリムに
+qty = {k: v for k, v in qty.items() if k in new_selected}
 
 S["selected"] = new_selected
-# 選択が外れた品の数量は邪魔なので削除、選択中のものだけ保持
-S["qty"] = {k: v for k, v in new_qty.items() if k in new_selected}
+S["qty"] = qty
 
-# 4) 計算（選択中かつ数量>0 の行だけ）
-calc_src = edited[(edited["選択"] == True) & (edited["数量（基準単位）"] > 0)].copy()
 st.markdown("---")
-st.subheader("見積結果")
+st.subheader("選択品の数量入力（抽出表示）")
 
-if calc_src.empty:
-    st.info("商品に✔を入れて数量を入力してください。")
+if len(S["selected"]) == 0:
+    st.info("上の一覧で見積したい商品に ✔ を入れてください。")
 else:
-    calc_src["小計（税抜）"] = calc_src["数量（基準単位）"] * calc_src["単価（基準単位）"]
+    # 下：選択品だけを抽出して数量を編集
+    picked = TABLE[TABLE["商品ID"].isin(S["selected"])][
+        ["商品ID","商品名","規格/仕様","基準単位"]
+    ].copy()
+    picked["単価（基準単位）"] = picked["商品ID"].map(TABLE.set_index("商品ID")["◎ 採用単価"])
+    picked["数量（基準単位）"] = picked["商品ID"].map(S["qty"]).fillna(1.0)
+
+    edit_sel = st.data_editor(
+        picked,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        key="selected_only",
+        column_config={
+            "単価（基準単位）": st.column_config.NumberColumn("単価（基準単位）", format="%.1f"),
+            "数量（基準単位）": st.column_config.NumberColumn("数量（基準単位）", step=1.0),
+        }
+    )
+
+    # 数量の編集をセッションに反映（保持）
+    S["qty"] = {
+        row["商品ID"]: float(row["数量（基準単位）"])
+        for _, row in edit_sel.iterrows() if row["数量（基準単位）"] > 0
+    }
+
+    # 計算
+    calc = edit_sel.copy()
+    calc["小計（税抜）"] = calc["数量（基準単位）"] * calc["単価（基準単位）"]
 
     c1, c2, _ = st.columns(3)
     tax_rate = c1.number_input("消費税率(%)", 0.0, 100.0, 10.0, 0.1)
     rounding = c2.selectbox("端数処理", ["四捨五入","切り上げ","切り捨て"], index=0)
 
-    st.dataframe(
-        calc_src[["商品ID","商品名","規格/仕様","基準単位","単価（基準単位）","数量（基準単位）","小計（税抜）"]],
-        use_container_width=True, height=320
-    )
+    st.dataframe(calc, use_container_width=True, height=320)
 
-    subtotal = float(calc_src["小計（税抜）"].sum())
+    subtotal = float(calc["小計（税抜）"].sum())
     tax_raw = subtotal * tax_rate / 100.0
 
     def _round(x: float) -> float:
@@ -303,13 +327,14 @@ else:
     m2.metric(f"消費税（{tax_rate:.1f}%）", f"{tax:,.0f} 円")
     m3.metric("合計（税込）", f"{grand:,.0f} 円")
 
-    # CSV出力（任意）
+    # CSV
     export_cols = ["商品ID","商品名","規格/仕様","基準単位","単価（基準単位）","数量（基準単位）","小計（税抜）"]
-    csv_quote = calc_src[export_cols].to_csv(index=False).encode("utf-8-sig")
+    csv_quote = calc[export_cols].to_csv(index=False).encode("utf-8-sig")
     st.download_button("↓ この見積明細をCSVでダウンロード",
                        data=csv_quote,
                        file_name=f"easy_quote_{datetime.now():%Y%m%d}.csv",
                        mime="text/csv")
+
 
 
 # -------------------------------------
