@@ -78,6 +78,34 @@ ITEMS = pd.concat([
         ["rebar_bar10_4m",         "鉄筋",      "鉄筋",       "φ10 4m棒",   "本", None],
     ], columns=["item_id","category","name","spec","base_unit","units_per_box"]).set_index("item_id")
 ])
+
+# === 生コン（品番ごと）＋ 割増類 ＋ 砕石 ===
+_items_add = pd.DataFrame([
+    # 生コン（品番）
+    ["rmx_21_15_20N", "生コン",   "レディーミクストコンクリート", "21-15-20 N", "m3", None],
+    ["rmx_24_18_20N", "生コン",   "レディーミクストコンクリート", "24-18-20 N", "m3", None],
+    ["rmx_18_18_20N", "生コン",   "レディーミクストコンクリート", "18-18-20 N", "m3", None],
+    ["rmx_18_12_20BB","生コン",   "レディーミクストコンクリート", "18-12-20 BB","m3", None],
+
+    # 生コン：割増・手数料
+    ["rmx_surcharge_smalltruck", "生コン割増", "小型車割増", "", "m3", None],   # 票ではm3計上が多いので m3 に統一
+    ["rmx_surcharge_empty",      "生コン割増", "空積料",     "", "台", None],
+    ["rmx_surcharge_remote",     "生コン割増", "遠隔地割増", "", "m3", None],
+    ["rmx_factory_truck_2t3t",   "生コン割増", "2t·3t車使用料(工場)", "", "台", None],
+
+    # 砕石（クラッシャーラン等）
+    ["agg_crusher_run_recycle",  "砕石", "再生クラッシャーラン", "", "m3", None],
+    ["agg_katama_sp",            "砕石", "カタマSP",             "", "m3", None],
+    ["agg_slag_rc30",            "砕石", "スラグ砕石RC-30",      "", "m3", None],
+    ["agg_nj_slag",              "砕石", "NJスラグ",             "", "m3", None],
+], columns=["item_id","category","name","spec","base_unit","units_per_box"]).set_index("item_id")
+
+# 追記（重複IDがあれば上書き）
+ITEMS = pd.concat([ITEMS, _items_add[~_items_add.index.isin(ITEMS.index)]], axis=0)
+ITEMS_D = ITEMS.to_dict(orient="index")
+
+
+
 ITEMS_D = ITEMS.to_dict(orient="index")  # 追記後に再生成
 
 
@@ -157,6 +185,29 @@ PRICES_INIT = pd.concat([
         ["2025-03-01","中村ブロック","rebar_bar10_4m",      "",       "",       "本",          370,        None,                "伝票写し"],
     ], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
 ])
+
+_prices_add = pd.DataFrame([
+    # 生コン 単価（円/m3）
+    ["2025-03-10","某生コンプラント","rmx_18_18_20N","", "", "m3", 22800, None, "伝票"],
+    ["2025-03-10","某生コンプラント","rmx_21_15_20N","", "", "m3", 23300, None, "伝票"],
+    ["2025-03-10","某生コンプラント","rmx_24_18_20N","", "", "m3", 23800, None, "伝票"],
+    ["2025-03-01","某生コンプラント","rmx_18_12_20BB","", "", "m3", 22200, None, "伝票"],
+
+    # 生コン 割増（票に合わせて）
+    ["2025-03-10","某生コンプラント","rmx_surcharge_smalltruck","", "", "m3", 2000, None, "小型車割増"],
+    ["2025-03-10","某生コンプラント","rmx_surcharge_empty",     "", "", "台", 2000, None, "空積料"],
+    ["2025-03-01","某生コンプラント","rmx_surcharge_remote",    "", "", "m3", 3500, None, "遠隔地割増"],
+    ["2025-03-10","某生コンプラント","rmx_factory_truck_2t3t",  "", "", "台", 5000, None, "2t·3t車使用料(工場)"],
+
+    # 砕石（通知書：令和7年10月1日実施／土場渡し 円/m3）
+    ["2025-10-01","上野石材","agg_crusher_run_recycle","", "", "m3", 1700, None, "価格改定通知"],
+    ["2025-10-01","上野石材","agg_katama_sp",          "", "", "m3", 1600, None, "価格改定通知"],
+    ["2025-10-01","上野石材","agg_slag_rc30",          "", "", "m3", 1500, None, "価格改定通知"],
+    ["2025-10-01","上野石材","agg_nj_slag",            "", "", "m3", 1000, None, "価格改定通知"],
+], columns=["date","vendor","item_id","standard","diameter","invoice_unit","unit_price","qty_per_invoice_unit","source"])
+
+PRICES_INIT = pd.concat([PRICES_INIT, _prices_add], ignore_index=True)
+
 
 
 # -------------------------------------
@@ -522,6 +573,95 @@ if submitted:
             st.write({"枚数": int(mesh_sheets),"結束線(kg)": round(tie_kg,2),
                       "サイコロ(個)": int(sykoro_pcs),"小計(円)": round(total_cost_mesh)})
 
+        # -------------------------------------
+# 生コン・砕石 自動拾い（面積×厚み）＋ 見積カートへ上書き反映
+# -------------------------------------
+st.markdown("---")
+st.subheader("生コン・砕石 自動拾い（面積×厚み）")
+
+with st.form("mix_stone_form"):
+    c1, c2 = st.columns(2)
+    L = c1.number_input("長さ L (m)", min_value=0.0, step=0.1, value=10.0)
+    W = c2.number_input("幅 W (m)",   min_value=0.0, step=0.1, value=6.0)
+
+    A = L * W
+    st.caption(f"→ 面積 = {A:.2f} ㎡")
+
+    st.markdown("**厚み・係数**")
+    c3, c4, c5, c6 = st.columns(4)
+    t_conc = c3.number_input("生コン 厚み t (m)", min_value=0.0, step=0.01, value=0.12)
+    loss_conc = c4.number_input("生コン ロス率(%)", min_value=0.0, max_value=20.0, step=0.5, value=3.0)
+
+    t_stone = c5.number_input("砕石 厚み t (m)", min_value=0.0, step=0.01, value=0.10)
+    # 現場は「締固め厚＝出来形厚」→発注はふくらみ係数で多め：例 1.25
+    swell_stone = c6.number_input("砕石 膨張係数(発注/出来形)", min_value=1.00, max_value=1.50, step=0.01, value=1.25)
+
+    st.markdown("**見積反映（排他的）**")
+    mode_ms = st.radio("どれを見積に上書き反映？", ["反映しない","生コンのみ","砕石のみ","両方"], index=0)
+
+    submitted_ms = st.form_submit_button("数量を計算して見積に反映")
+
+if submitted_ms:
+    # 体積（m3）
+    v_conc  = A * t_conc
+    v_conc *= (1.0 + loss_conc/100.0)
+    v_stone = A * t_stone * swell_stone  # 出来形厚 × 膨張係数
+
+    # 結果表示
+    st.success("数量計算")
+    st.write({
+        "生コン(m3)": round(v_conc, 3),
+        "砕石(m3 発注量)": round(v_stone, 3),
+    })
+
+    # --- 見積カートに上書き反映（非累積） ---
+    S  = st.session_state["pick_state"]
+    AI = st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}, "mix": {}, "stone": {}})
+
+    def apply_mode(tag: str, new_items: dict):
+        prev = AI.get(tag, {}) or {}
+        # 差し戻し＋上書き
+        for iid, new_q in new_items.items():
+            cur = float(S["qty"].get(iid, 0.0))
+            prev_q = float(prev.get(iid, 0.0))
+            nxt = cur - prev_q + float(new_q)
+            if nxt <= 0:
+                S["qty"].pop(iid, None)
+                S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt
+                S["selected"].add(iid)
+        # 前回だけにあって今回なくなったものをクリア
+        for iid in set(prev.keys()) - set(new_items.keys()):
+            cur = float(S["qty"].get(iid, 0.0))
+            prev_q = float(prev.get(iid, 0.0))
+            nxt = cur - prev_q
+            if nxt <= 0:
+                S["qty"].pop(iid, None)
+                S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt
+                S["selected"].add(iid)
+        AI[tag] = dict(new_items)
+
+    mix_items   = {"rmx_normal":   float(v_conc)}   if v_conc  > 0 else {}
+    stone_items = {"crushed_40_0": float(v_stone)}  if v_stone > 0 else {}
+
+    changed = False
+    if mode_ms in ("生コンのみ","両方"):
+        apply_mode("mix", mix_items)
+        st.success("生コンを見積に上書き反映しました。")
+        changed = True
+    if mode_ms in ("砕石のみ","両方"):
+        apply_mode("stone", stone_items)
+        st.success("砕石を見積に上書き反映しました。")
+        changed = True
+
+    if changed:
+        st.rerun()
+
+        
+        
         # ---- 見積カート反映（非累積）----
         st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
         st.session_state.setdefault("auto_injected", {"rebar": {}, "mesh": {}})
