@@ -636,6 +636,170 @@ if submitted:
             apply_mode("mesh", mesh_items)
             st.success("メッシュ方式をカートに上書きしました。"); st.rerun()
 
+# -------------------------------------
+# ブロック基礎（ブロック積） 自動拾い ＋ 見積カートへ上書き
+# 位置：鉄筋スラブの直後～履歴の前に置く
+# -------------------------------------
+st.markdown("---")
+st.subheader("ブロック基礎（ブロック積） 自動拾い")
+
+with st.form("block_found_form"):
+    c1, c2 = st.columns(2)
+    L = c1.number_input("延長 L (m)", min_value=0.0, step=0.1, value=10.0)
+    H = c2.number_input("高さ H (m)", min_value=0.0, step=0.1, value=0.8)
+
+    # ブロック種別（厚み別）
+    block_choice = st.selectbox(
+        "ブロック種別",
+        [
+            ("block_B10_basic", "B種10cm 基本（100厚）"),
+            ("block_C12_basic", "C種12cm 基本（120厚）"),
+            ("block_C15_basic", "C種15cm 基本（150厚）"),
+            ("block_C19_basic", "C種19cm 基本（190厚）"),
+        ],
+        index=1,
+        format_func=lambda x: x[1]
+    )
+
+    st.caption("※ 隅・半マスは任意入力。未入力なら“基本”だけで計算（ロス率で吸収）。")
+
+    c3, c4, c5 = st.columns(3)
+    corners = c3.number_input("隅（コーナー）個数", min_value=0, step=1, value=0)
+    halfs   = c4.number_input("1/2ブロック個数", min_value=0, step=1, value=0)
+    joint_mm= c5.number_input("目地厚(mm)", min_value=5.0, step=1.0, value=10.0)
+
+    c6, c7 = st.columns(2)
+    loss_pct = c6.number_input("ロス率(%)", min_value=0.0, max_value=20.0, step=0.5, value=3.0)
+    block_len_mm = c7.number_input("ブロック長さ(mm)（標準390）", min_value=300.0, max_value=450.0, step=5.0, value=390.0)
+
+    st.markdown("**モルタル・鉄筋 係数（現場ごとに調整可）**")
+    c8, c9, c10 = st.columns(3)
+    cement_per_block = c8.number_input("セメント袋/ブロック（目安0.05）", min_value=0.0, step=0.01, value=0.05)
+    sand_per_cement  = c9.number_input("袋砂 / セメント1袋（例4）", min_value=0.0, step=0.5, value=4.0)
+    gravel_per_cement= c10.number_input("袋砂利 / セメント1袋（通常0）", min_value=0.0, step=0.5, value=0.0)
+
+    c11, c12, c13 = st.columns(3)
+    use_hbar = c11.checkbox("横筋を入れる（φ10 4m棒）", value=True)
+    hbar_pitch_course = c12.number_input("横筋ピッチ（段おき）", min_value=1, step=1, value=1)  # 1=毎段, 2=1段おき
+    vbar_pitch_m = c13.number_input("縦筋ピッチ（m）※任意", min_value=0.3, step=0.1, value=1.2)
+
+    st.caption("※ 縦筋は“必要なら”チェック。4m棒の使用本数で概算します。")
+    use_vbar = st.checkbox("縦筋も入れる（φ10 4m棒）", value=False)
+
+    reflect = st.radio("見積への反映", ["反映しない","上書き反映"], index=1)
+    submitted_blk = st.form_submit_button("数量を計算")
+
+# ---- 計算＆表示（フォーム外）----
+if submitted_blk:
+    # 安全な単価取得
+    def price_of(item_id: str) -> float:
+        try:
+            v = TABLE.loc[TABLE["商品ID"]==item_id, "◎ 採用単価"].values
+            return float(v[0]) if len(v) else 0.0
+        except Exception:
+            return 0.0
+
+    # --- ブロック個数 ---
+    # 実効長（目地考慮）：1ピースの有効長 ≒ (ブロック長 + 目地)
+    pitch_m = (block_len_mm + joint_mm) / 1000.0
+    courses = int(max(1, round(H / 0.2)))  # 1段 ≒ 200mm（190+目地）とみなす簡易
+    blocks_per_course = max(1, int(math.ceil(L / pitch_m)))
+    base_blocks = blocks_per_course * courses
+    # 追加（隅・半）
+    base_blocks += int(max(0, corners))
+    half_blocks = int(max(0, halfs))
+
+    # ロス加算
+    total_blocks = math.ceil(base_blocks * (1.0 + loss_pct/100.0))
+
+    # --- モルタル（袋換算） ---
+    cement_bags = total_blocks * cement_per_block
+    sand_bags   = cement_bags * sand_per_cement
+    gravel_bags = cement_bags * gravel_per_cement
+
+    # --- 鉄筋（φ10 4m棒） ---
+    rebar_id = "rebar_bar10_4m"
+    hbars = 0
+    vbars = 0
+
+    if use_hbar:
+        used_courses = math.ceil(courses / max(1, hbar_pitch_course))
+        # 1段分の必要本数（4m定尺で割り付け）
+        bars_per_course = math.ceil(L / 4.0)
+        hbars = used_courses * bars_per_course
+
+    if use_vbar and vbar_pitch_m > 0:
+        pos = math.ceil(L / vbar_pitch_m) + 1  # 端部含めて+1
+        total_len_v = pos * H                   # 全縦筋延長（m）
+        vbars = math.ceil(total_len_v / 4.0)    # 4m棒換算
+
+    # --- 結果表示 ---
+    st.success("ブロック積 計算結果（数量）")
+    st.write({
+        "段数(概算)": int(courses),
+        "ブロック基本(個)": int(total_blocks),
+        "1/2ブロック(個)": int(half_blocks),
+        "隅ブロック(個)": int(corners),
+        "セメント(袋)": round(cement_bags, 2),
+        "袋砂(袋)": round(sand_bags, 2),
+        "袋砂利(袋)": round(gravel_bags, 2),
+        "横筋 φ10 4m(本)": int(hbars),
+        "縦筋 φ10 4m(本)": int(vbars),
+    })
+
+    # --- 見積に“非累積で上書き” ---
+    if reflect == "上書き反映":
+        st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
+        st.session_state.setdefault("auto_injected", {"block_found": {}})
+        S  = st.session_state["pick_state"]
+        AI = st.session_state["auto_injected"]
+
+        # 商品IDのマッピング（基本/隅/半）
+        item_basic = block_choice[0]
+        item_corner = {
+            "block_B10_basic":"block_B10_corner",
+            "block_C12_basic":"block_C12_corner",
+        }.get(item_basic, None)
+        item_half = {
+            "block_C12_basic":"block_C12_half",
+        }.get(item_basic, None)
+
+        new_items = { item_basic: float(total_blocks) }
+        if item_corner and corners > 0:
+            new_items[item_corner] = float(corners)
+        if item_half and half_blocks > 0:
+            new_items[item_half] = float(half_blocks)
+
+        if cement_bags > 0: new_items["bag_cement"] = float(cement_bags)
+        if sand_bags   > 0: new_items["bag_sand"]   = float(sand_bags)
+        if gravel_bags > 0: new_items["bag_gravel"] = float(gravel_bags)
+
+        if (use_hbar and hbars>0) or (use_vbar and vbars>0):
+            new_items[rebar_id] = float(hbars + vbars)
+
+        # 非累積の上書き（前回を差し戻して今回分に入れ替え）
+        prev = AI.get("block_found", {}) or {}
+        for iid, new_q in new_items.items():
+            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+            nxt = cur - prv + float(new_q)
+            if nxt <= 0:
+                S["qty"].pop(iid, None); S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt; S["selected"].add(iid)
+        for iid in set(prev.keys()) - set(new_items.keys()):
+            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+            nxt = cur - prv
+            if nxt <= 0:
+                S["qty"].pop(iid, None); S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt; S["selected"].add(iid)
+        AI["block_found"] = dict(new_items)
+
+        st.success("ブロック基礎（ブロック積）を見積に上書き反映しました。")
+        st.rerun()
+
+
+
 
 # -------------------------------------
 # 履歴（任意表示）
