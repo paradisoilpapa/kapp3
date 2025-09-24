@@ -799,210 +799,258 @@ if submitted_blk:
         st.rerun()
 
 # -------------------------------------
-# 基礎一括プラットフォーム（生コン・配筋・砕石）
-# スラブ + 立上り梁 + フーチング + 砕石 をまとめて数量算出
-# 見積カートへは非累積で「foundation_all」キーで上書き反映
+# 基礎：土間スラブ（ベタコン）フォーム
+# （生コン・配筋・砕石・周囲型枠）
 # -------------------------------------
 st.markdown("---")
-st.subheader("基礎一括（生コン・配筋・砕石）")
+st.subheader("基礎 土間スラブ（ベタコン）｜生コン・配筋・砕石・周囲型枠")
 
-with st.form("foundation_all_form"):
-    st.markdown("**平面寸法（外々）**")
+with st.form("slab_form"):
+    # 平面寸法
     c1, c2 = st.columns(2)
-    L = c1.number_input("長さ L (m)", min_value=0.0, step=0.1, value=12.290)
-    W = c2.number_input("幅 W (m)",   min_value=0.0, step=0.1, value=5.980)
+    L = c1.number_input("土間 長さ L (m)", min_value=0.0, step=0.1, value=12.290)
+    W = c2.number_input("土間 幅 W (m)",   min_value=0.0, step=0.1, value=5.980)
     A = L * W
-    st.caption(f"→ 面積 = {A:.3f} ㎡")
+    P = 2*(L+W)
+    st.caption(f"→ 面積 = {A:.2f} ㎡ ／ 周長 = {P:.2f} m")
 
-    st.markdown("**スラブ**")
+    # 生コン
     c3, c4, c5 = st.columns(3)
-    slab_t = c3.number_input("スラブ厚 (mm)", min_value=50.0, step=5.0, value=100.0)
-    slab_layers = c4.selectbox("配筋層", ["単層(シングル)","複層(ダブル)"], index=0)
-    slab_layer_n = 2 if slab_layers.startswith("複層") else 1
-    slab_pitch = c5.number_input("配筋ピッチ (mm)", min_value=75.0, step=25.0, value=200.0)
+    t_mm = c3.number_input("土間 厚み (mm)", min_value=50.0, step=10.0, value=100.0)
+    rmx_item = c4.selectbox("生コン品番", [
+        ("rmx_18_18_20N","18-18-20 N"),
+        ("rmx_21_15_20N","21-15-20 N"),
+        ("rmx_24_18_20N","24-18-20 N"),
+        ("rmx_18_12_20BB","18-12-20 BB"),
+    ], index=1, format_func=lambda x: x[1])
+    conc_waste = c5.number_input("生コンロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
 
+    # スラブ配筋（2方向@ピッチ）
+    st.markdown("**スラブ配筋（2方向@ピッチ）**")
     c6, c7, c8 = st.columns(3)
-    slab_rebar = c6.selectbox("スラブ主筋", [
+    cover_mm = c6.number_input("かぶり（外周）mm", min_value=0.0, step=5.0, value=40.0)
+    pitch_mm = c7.number_input("配筋ピッチ (mm)", min_value=75.0, step=25.0, value=200.0)
+    layers = c8.selectbox("配筋層", ["単層(シングル)","複層(ダブル)"], index=0)
+    layer_n = 2 if layers.startswith("複層") else 1
+
+    c9, c10, c11 = st.columns(3)
+    slab_rebar = c9.selectbox("スラブ主筋", [
         ("rebar_D10_SD295A","SD295A D10"),
         ("rebar_D13_SD295A","SD295A D13"),
         ("rebar_D16_SD345", "SD345 D16"),
     ], index=0, format_func=lambda x: x[1])
-    slab_cover = c7.number_input("かぶり（外周）mm", min_value=0.0, step=5.0, value=40.0)
-    slab_waste = c8.number_input("ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
+    tie_kg_per_sqm = c10.number_input("結束線係数 (kg/㎡/層)", min_value=0.0, step=0.1, value=0.4)
+    chair_per_sqm  = c11.number_input("サイコロ係数 (個/㎡/層)", min_value=0.0, step=0.5, value=4.0)
 
-    c9, c10 = st.columns(2)
-    tie_kg_per_sqm = c9.number_input("結束線係数 (kg/㎡/層)", min_value=0.0, step=0.1, value=0.4)
-    chair_per_sqm  = c10.number_input("サイコロ係数 (個/㎡/層)", min_value=0.0, step=0.5, value=4.0)
-
-    st.markdown("**立上り梁（基礎梁）**")
-    c11, c12, c13 = st.columns(3)
-    beam_bw = c11.number_input("梁幅 b (mm)",  min_value=100.0, step=10.0, value=150.0)
-    beam_d  = c12.number_input("梁成 h (mm)",  min_value=100.0, step=10.0, value=300.0)
-    beam_len_mode = c13.selectbox("梁延長", ["外周のみ(L×2+W×2)","外周＋中通り（手入力m）"], index=0)
-    extra_beam_len = 0.0
-    if beam_len_mode.endswith("手入力m"):
-        extra_beam_len = st.number_input("中通り梁 延長 (m)", min_value=0.0, step=0.5, value=0.0)
-    beam_len = 2*(L+W) + extra_beam_len
-
-    c14, c15 = st.columns(2)
-    beam_rebar_coef = c14.number_input("梁の鉄筋係数 (kg/m³)", min_value=0.0, step=5.0, value=110.0)
-    stirrup_coef    = c15.number_input("梁の結束線係数 (kg/m³)", min_value=0.0, step=0.5, value=2.0)
-
-    st.markdown("**独立フーチング**")
-    c16, c17, c18, c19 = st.columns(4)
-    footing_n = c16.number_input("フーチング個数", min_value=0, step=1, value=0)
-    footing_b = c17.number_input("幅B (mm)", min_value=300.0, step=10.0, value=650.0)
-    footing_d = c18.number_input("奥行D (mm)", min_value=300.0, step=10.0, value=650.0)
-    footing_t = c19.number_input("厚さT (mm)", min_value=150.0, step=10.0, value=150.0)
-    c20, c21 = st.columns(2)
-    footing_rebar_coef = c20.number_input("フーチング鉄筋係数 (kg/m³)", min_value=0.0, step=5.0, value=90.0)
-    footing_tie_coef   = c21.number_input("フーチング結束線係数 (kg/m³)", min_value=0.0, step=0.5, value=1.0)
-
+    # 砕石（下地）
     st.markdown("**砕石（下地）**")
-    c22, c23 = st.columns(2)
-    subbase_t = c22.number_input("砕石厚 (mm)", min_value=0.0, step=10.0, value=100.0)
-    agg_item  = c23.selectbox("砕石品目", [
+    c12, c13 = st.columns(2)
+    subbase_t_mm = c12.number_input("砕石厚 (mm)", min_value=0.0, step=10.0, value=100.0)
+    agg_item = c13.selectbox("砕石品目", [
         ("agg_crusher_run_recycle","再生クラッシャーラン"),
         ("agg_katama_sp","カタマSP"),
         ("agg_slag_rc30","スラグ砕石RC-30"),
         ("agg_nj_slag","NJスラグ"),
     ], index=0, format_func=lambda x: x[1])
 
-    st.markdown("**生コン（品番選択）**")
-    rmx_item = st.selectbox("生コン品番", [
+    # 周囲型枠（片面/両面切替：土間は通常片面）
+    st.markdown("**周囲型枠（土間用）**")
+    c14, c15, c16 = st.columns(3)
+    form_side = c14.selectbox("型枠面", ["片面（通常）","両面（特殊）"], index=0)
+    screws_per_sheet = c15.number_input("固定ビス 本/枚", min_value=0, step=1, value=30)
+    form_waste = c16.number_input("型枠ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=8.0)
+    # サンギ：土間は片面想定→既定1m/か所（両面なら2m/か所）
+    s_col1, _ = st.columns(2)
+    sanki_override = s_col1.checkbox("サンギを両面換算にする（2m/か所）", value=False)
+
+    submitted_slab = st.form_submit_button("数量を計算")
+
+if submitted_slab:
+    import math
+    # 生コン
+    slab_m3 = A * (t_mm/1000.0) * (1.0 + conc_waste/100.0)
+
+    # 配筋（有効寸）
+    cov = cover_mm/1000.0
+    L_eff, W_eff = max(0.0, L-2*cov), max(0.0, W-2*cov)
+    px = py = pitch_mm/1000.0
+    n_x = int(math.floor(W_eff/px)) + 1 if px>0 else 0
+    n_y = int(math.floor(L_eff/py)) + 1 if py>0 else 0
+    total_m_slab = (n_x*L_eff + n_y*W_eff) * layer_n
+    total_m_slab *= 1.0  # ロスは配筋では別途設定が無いので0%扱い（必要なら項目追加可能）
+
+    # 重量・付帯
+    dia = "D10" if "D10" in slab_rebar[0] else ("D13" if "D13" in slab_rebar[0] else "D16")
+    kgpm = REBAR_KG_PER_M.get(dia, 0.0)
+    slab_kg = total_m_slab * kgpm
+    tie_kg  = A * tie_kg_per_sqm * layer_n
+    chairs  = math.ceil(A * chair_per_sqm * layer_n)
+
+    # 砕石
+    agg_m3 = A * (subbase_t_mm/1000.0) if subbase_t_mm>0 else 0.0
+
+    # 周囲型枠（パネル：1820×910、採用高さ＝土間厚の切上げ 200/300/450/600/900）
+    avail = [200,300,450,600,900]
+    H_use = next((x for x in avail if x>=t_mm), avail[-1])
+    side_mul = 1 if form_side.startswith("片面") else 2
+    sheet_len = 1.82
+    sheet_h_m = H_use/1000.0
+    area_per_sheet = sheet_len * sheet_h_m
+    gross_area = P * sheet_h_m * side_mul * (1.0 + form_waste/100.0)
+    sheets = math.ceil(gross_area / area_per_sheet)
+    screws = sheets * screws_per_sheet
+
+    # 土間周囲は通常「片面」でセパ/Pコン不要。サンギは 1m/か所（片面）/ 2m/か所（両面）
+    pitch = 0.45
+    cols = math.ceil(P / pitch) + 1
+    rows = max(1, math.ceil((H_use/1000.0) / pitch))
+    positions = math.ceil(cols * rows * (1.0 + form_waste/100.0))
+    sanki_m = positions * (2.0 if (sanki_override or side_mul==2) else 1.0)
+
+    st.success("土間スラブ 数量")
+    st.write({
+        "生コン(m³)": round(slab_m3,3),
+        "スラブ鉄筋 延長(m)": round(total_m_slab,1),
+        "スラブ鉄筋 重量(kg)": round(slab_kg,1),
+        "結束線(kg)": round(tie_kg,2),
+        "サイコロ(個)": int(chairs),
+        "砕石(m³)": round(agg_m3,3),
+        "周囲型枠 採用高さ(mm)": H_use,
+        "コンパネ(枚)": sheets,
+        "固定ビス(本)": screws,
+        "サンギ30角(m)": round(sanki_m,1),
+        "（注）土間周囲型枠は通常片面のためセパ/Pコンは計上しません": "必要時は両面に切替してください",
+    })
+
+    # CSV
+    import pandas as pd
+    df_slab = pd.DataFrame([{
+        "L(m)": L, "W(m)": W, "面積(㎡)": round(A,2), "周長(m)": round(P,2),
+        "厚み(mm)": t_mm, "生コン(m³)": round(slab_m3,3),
+        "鉄筋延長(m)": round(total_m_slab,1), "鉄筋重量(kg)": round(slab_kg,1),
+        "結束線(kg)": round(tie_kg,2), "サイコロ(個)": int(chairs),
+        "砕石(m³)": round(agg_m3,3),
+        "型枠高さ(mm)": H_use, "パネル(枚)": sheets, "ビス(本)": screws, "サンギ(m)": round(sanki_m,1),
+        "型枠面": form_side
+    }])
+    st.download_button("↓ 土間スラブ 明細CSV",
+        data=df_slab.to_csv(index=False).encode("utf-8-sig"),
+        file_name="slab_bedacon.csv", mime="text/csv")
+
+
+# -------------------------------------
+# 基礎：立上り梁フォーム（生コン・配筋係数・型枠）
+# （延長モード：全周 / L×1+W×2 / L×2+W×1 / 任意）
+# -------------------------------------
+st.markdown("---")
+st.subheader("基礎 立上り梁｜生コン・配筋（係数）・型枠（両面）")
+
+with st.form("beam_form"):
+    c1, c2 = st.columns(2)
+    Lb = c1.number_input("建物長さ L (m)", min_value=0.0, step=0.1, value=12.290)
+    Wb = c2.number_input("建物幅 W (m)",   min_value=0.0, step=0.1, value=5.980)
+
+    mode = st.radio("梁延長の計算方法", [
+        "全周 (L×2+W×2)",
+        "L×1+W×2",
+        "L×2+W×1",
+        "任意入力"
+    ], index=0)
+    if mode == "全周 (L×2+W×2)":
+        beam_len = 2*(Lb+Wb)
+    elif mode == "L×1+W×2":
+        beam_len = Lb + 2*Wb
+    elif mode == "L×2+W×1":
+        beam_len = 2*Lb + Wb
+    else:
+        beam_len = st.number_input("梁延長 任意入力 (m)", min_value=0.0, step=0.1, value=10.0)
+    st.caption(f"→ 梁延長 = {beam_len:.2f} m")
+
+    c3, c4 = st.columns(2)
+    b = c3.number_input("梁幅 b (mm)", min_value=100.0, step=10.0, value=150.0)
+    h = c4.number_input("梁成 h (mm)", min_value=100.0, step=10.0, value=450.0)
+
+    # 生コン
+    rmx_item_b = st.selectbox("生コン品番（立上り）", [
         ("rmx_18_18_20N","18-18-20 N"),
         ("rmx_21_15_20N","21-15-20 N"),
         ("rmx_24_18_20N","24-18-20 N"),
         ("rmx_18_12_20BB","18-12-20 BB"),
     ], index=1, format_func=lambda x: x[1])
+    conc_waste_b = st.number_input("生コンロス率(%)（立上り）", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
 
-    st.markdown("**その他**")
-    c24, c25 = st.columns(2)
-    add_conc_m3 = c24.number_input("追加コンクリート量（雑・スロープ等, m³）", min_value=0.0, step=0.1, value=0.0)
-    add_note    = c25.text_input("メモ（任意）", value="")
+    # 配筋（係数）
+    c5, c6 = st.columns(2)
+    rebar_coef = c5.number_input("鉄筋係数 (kg/m³)", min_value=0.0, step=5.0, value=110.0)
+    tie_coef   = c6.number_input("結束線係数 (kg/m³)", min_value=0.0, step=0.5, value=2.0)
 
-    st.markdown("**金物（任意）**")
-    c26, c27 = st.columns(2)
-    use_anchor = c26.checkbox("アンカーボルトを計上する", value=True)
-    anchor_qty = c27.number_input("アンカーボルト数量（本）", min_value=0, step=1, value=20 if use_anchor else 0)
+    # 型枠（両面）＋ 金物（450×450固定）
+    st.markdown("**型枠（両面）・金物**")
+    c7, c8, c9 = st.columns(3)
+    screws_per_sheet_b = c7.number_input("固定ビス 本/枚", min_value=0, step=1, value=30)
+    form_waste_b = c8.number_input("型枠ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=8.0)
+    sanki_both_b = c9.checkbox("サンギ両面で計上（2m/か所）", value=True)
 
-    reflect = st.radio("見積への反映", ["反映しない","上書き反映"], index=1)
-    submitted_fd = st.form_submit_button("数量を計算")
+    submitted_beam = st.form_submit_button("数量を計算")
 
-# ---- 計算・表示・反映 ----
-if submitted_fd:
-    # 単価取得（0円許容）
-    def price_of(item_id: str) -> float:
-        try:
-            v = TABLE.loc[TABLE["商品ID"]==item_id, "◎ 採用単価"].values
-            return float(v[0]) if len(v) else 0.0
-        except Exception:
-            return 0.0
+if submitted_beam:
+    import math
+    # 生コン
+    beam_m3 = beam_len * (b/1000.0) * (h/1000.0) * (1.0 + conc_waste_b/100.0)
 
-    # 生コン体積
-    slab_m3 = A * (slab_t/1000.0)
-    beam_m3 = beam_len * (beam_bw/1000.0) * (beam_d/1000.0)
-    footing_m3 = footing_n * (footing_b/1000.0) * (footing_d/1000.0) * (footing_t/1000.0)
-    conc_total_m3 = slab_m3 + beam_m3 + footing_m3 + add_conc_m3
+    # 配筋（係数）
+    rebar_kg = beam_m3 * rebar_coef
+    tie_kg   = beam_m3 * tie_coef
 
-    # 砕石体積
-    agg_m3 = A * (subbase_t/1000.0) if subbase_t > 0 else 0.0
+    # 型枠（パネル：1820×910・両面）
+    avail = [200,300,450,600,900]
+    H_use = next((x for x in avail if x>=h), avail[-1])
+    sheet_len = 1.82
+    sheet_h_m = H_use/1000.0
+    area_per_sheet = sheet_len * sheet_h_m
+    gross_area = beam_len * sheet_h_m * 2 * (1.0 + form_waste_b/100.0)
+    sheets = math.ceil(gross_area / area_per_sheet)
+    screws = sheets * screws_per_sheet_b
 
-    # スラブ配筋（2方向@ピッチ、層数、外周かぶり控除、ロス率）
-    cov = slab_cover/1000.0
-    L_eff, W_eff = max(0.0, L - 2*cov), max(0.0, W - 2*cov)
-    px = py = slab_pitch/1000.0
-    n_x = int(math.floor(W_eff/px)) + 1 if px>0 else 0
-    n_y = int(math.floor(L_eff/py)) + 1 if py>0 else 0
-    total_m_slab = (n_x*L_eff + n_y*W_eff) * slab_layer_n
-    total_m_slab *= (1.0 + slab_waste/100.0)
-    slab_kgpm = REBAR_KG_PER_M.get("D10" if "D10" in slab_rebar[0] else ("D13" if "D13" in slab_rebar[0] else "D16"), 0.0)
-    slab_kg = total_m_slab * slab_kgpm
-    tie_kg = A * tie_kg_per_sqm * slab_layer_n
-    chairs = math.ceil(A * chair_per_sqm * slab_layer_n)
+    # Pコン・セパ・サンギ（450×450固定）
+    pitch = 0.45
+    cols = math.ceil(beam_len / pitch) + 1
+    rows = max(1, math.ceil((H_use/1000.0) / pitch))
+    positions = math.ceil(cols * rows * (1.0 + form_waste_b/100.0))
+    sepa_qty = positions               # 本（1か所=1本）
+    pcon_qty = positions * 2           # 個（両端）
+    sanki_m  = positions * (2.0 if sanki_both_b else 1.0)
 
-    # 梁・フーチングの配筋（簡易：kg/m3 係数）
-    rebar_beam_kg    = beam_m3 * beam_rebar_coef
-    tie_beam_kg      = beam_m3 * stirrup_coef
-    rebar_footing_kg = footing_m3 * footing_rebar_coef
-    tie_footing_kg   = footing_m3 * footing_tie_coef
-
-    # コスト（原価）
-    conc_cost  = conc_total_m3 * price_of(rmx_item[0])
-    agg_cost   = agg_m3 * price_of(agg_item[0])
-    slab_rb_cost = total_m_slab * price_of(slab_rebar[0])
-    tie_cost      = (tie_kg + tie_beam_kg + tie_footing_kg) * price_of("tie_wire_band5_350")
-    chair_cost    = chairs * price_of("conc_sykoro_4x5x6")
-
-    # 梁・フーチングの鉄筋は同径でまとめて“重量→延長換算”せず、kgのまま→m単価品に合わせたい場合は係数をD10換算にする
-    # ここでは D13 を標準とし、kg→mはしない（※将来：棒鋼IDを別途用意）
-    beam_kg_cost    = rebar_beam_kg * (price_of("rebar_D13_SD295A") / REBAR_KG_PER_M.get("D13",1)) if REBAR_KG_PER_M.get("D13") else 0.0
-    footing_kg_cost = rebar_footing_kg * (price_of("rebar_D13_SD295A") / REBAR_KG_PER_M.get("D13",1)) if REBAR_KG_PER_M.get("D13") else 0.0
-
-    anchor_cost = anchor_qty * price_of("anchor_btn_1_2x240") if use_anchor and anchor_qty>0 else 0.0
-
-    total_cost = conc_cost + agg_cost + slab_rb_cost + beam_kg_cost + footing_kg_cost + tie_cost + chair_cost + anchor_cost
-
-    # 表示
-    st.success("数量・原価（税抜）")
+    st.success("立上り梁 数量")
     st.write({
-        "生コン 合計(m³)": round(conc_total_m3, 3),
-        "　└スラブ(m³)": round(slab_m3,3),
-        "　└立上り梁(m³)": round(beam_m3,3),
-        "　└フーチング(m³)": round(footing_m3,3),
-        "砕石 下地(m³)": round(agg_m3,3),
-        "スラブ鉄筋 総延長(m)": round(total_m_slab,1),
-        "スラブ鉄筋 重量(kg)": round(slab_kg,1),
-        "結束線(kg)（スラブ+梁+フーチング）": round(tie_kg + tie_beam_kg + tie_footing_kg,2),
-        "サイコロ(個)": int(chairs),
-        "アンカーボルト(本)": int(anchor_qty if use_anchor else 0),
-        "原価小計(円)": round(total_cost),
-        "メモ": add_note,
+        "生コン(m³)": round(beam_m3,3),
+        "鉄筋(kg)": round(rebar_kg,1),
+        "結束線(kg)": round(tie_kg,1),
+        "型枠 採用高さ(mm)": H_use,
+        "コンパネ(枚)": sheets,
+        "固定ビス(本)": screws,
+        "セパ(本)": sepa_qty,
+        "Pコン(個)": pcon_qty,
+        "サンギ30角(m)": round(sanki_m,1),
+        "ピッチ": "450×450（両方向）",
     })
 
-    # 見積カートへ上書き反映
-    if reflect == "上書き反映":
-        st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
-        st.session_state.setdefault("auto_injected", {"foundation_all": {}})
-        S  = st.session_state["pick_state"]
-        AI = st.session_state["auto_injected"]
-
-        new_items = {
-            rmx_item[0]: float(conc_total_m3),     # 生コン（m3）
-            agg_item[0]: float(agg_m3),            # 砕石（m3）
-            slab_rebar[0]: float(total_m_slab),    # スラブ筋（m）
-            "tie_wire_band5_350": float(tie_kg + tie_beam_kg + tie_footing_kg),  # kg
-            "conc_sykoro_4x5x6": float(chairs),    # 個
-        }
-        if use_anchor and anchor_qty>0:
-            new_items["anchor_btn_1_2x240"] = float(anchor_qty)
-
-        # 梁・フーチングの鉄筋（kg→D13換算のコスト参照に合わせて m 換算しない運用の場合は備考のみ）
-        # ここでは D13 を基準に“重量→延長換算”して m 商品に追加入力（実務上OK/NGは運用次第）
-        if REBAR_KG_PER_M.get("D13",0)>0:
-            add_m_from_kg = (rebar_beam_kg + rebar_footing_kg) / REBAR_KG_PER_M["D13"]
-            new_items["rebar_D13_SD295A"] = float(new_items.get("rebar_D13_SD295A", 0.0) + add_m_from_kg)
-
-        # 非累積上書き
-        prev = AI.get("foundation_all", {}) or {}
-        for iid, new_q in new_items.items():
-            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
-            nxt = cur - prv + float(new_q)
-            if nxt <= 0:
-                S["qty"].pop(iid, None); S["selected"].discard(iid)
-            else:
-                S["qty"][iid] = nxt; S["selected"].add(iid)
-        for iid in set(prev.keys()) - set(new_items.keys()):
-            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
-            nxt = cur - prv
-            if nxt <= 0:
-                S["qty"].pop(iid, None); S["selected"].discard(iid)
-            else:
-                S["qty"][iid] = nxt; S["selected"].add(iid)
-
-        AI["foundation_all"] = dict(new_items)
-        st.success("基礎一括（生コン・配筋・砕石）を見積に上書き反映しました。")
-        st.rerun()
+    # CSV
+    import pandas as pd
+    df_beam = pd.DataFrame([{
+        "梁延長(m)": round(beam_len,2),
+        "幅b(mm)": b, "成h(mm)": h,
+        "生コン(m³)": round(beam_m3,3),
+        "鉄筋(kg)": round(rebar_kg,1),
+        "結束線(kg)": round(tie_kg,1),
+        "型枠高さ(mm)": H_use,
+        "パネル(枚)": sheets, "ビス(本)": screws,
+        "セパ(本)": sepa_qty, "Pコン(個)": pcon_qty,
+        "サンギ(m)": round(sanki_m,1)
+    }])
+    st.download_button("↓ 立上り梁 明細CSV",
+        data=df_beam.to_csv(index=False).encode("utf-8-sig"),
+        file_name="beam_uprise.csv", mime="text/csv")
 
 
 
