@@ -798,6 +798,211 @@ if submitted_blk:
         st.success("ブロック基礎（ブロック積）を見積に上書き反映しました。")
         st.rerun()
 
+# -------------------------------------
+# 基礎一括プラットフォーム（生コン・配筋・砕石）
+# スラブ + 立上り梁 + フーチング + 砕石 をまとめて数量算出
+# 見積カートへは非累積で「foundation_all」キーで上書き反映
+# -------------------------------------
+st.markdown("---")
+st.subheader("基礎一括（生コン・配筋・砕石）")
+
+with st.form("foundation_all_form"):
+    st.markdown("**平面寸法（外々）**")
+    c1, c2 = st.columns(2)
+    L = c1.number_input("長さ L (m)", min_value=0.0, step=0.1, value=12.290)
+    W = c2.number_input("幅 W (m)",   min_value=0.0, step=0.1, value=5.980)
+    A = L * W
+    st.caption(f"→ 面積 = {A:.3f} ㎡")
+
+    st.markdown("**スラブ**")
+    c3, c4, c5 = st.columns(3)
+    slab_t = c3.number_input("スラブ厚 (mm)", min_value=50.0, step=5.0, value=100.0)
+    slab_layers = c4.selectbox("配筋層", ["単層(シングル)","複層(ダブル)"], index=0)
+    slab_layer_n = 2 if slab_layers.startswith("複層") else 1
+    slab_pitch = c5.number_input("配筋ピッチ (mm)", min_value=75.0, step=25.0, value=200.0)
+
+    c6, c7, c8 = st.columns(3)
+    slab_rebar = c6.selectbox("スラブ主筋", [
+        ("rebar_D10_SD295A","SD295A D10"),
+        ("rebar_D13_SD295A","SD295A D13"),
+        ("rebar_D16_SD345", "SD345 D16"),
+    ], index=0, format_func=lambda x: x[1])
+    slab_cover = c7.number_input("かぶり（外周）mm", min_value=0.0, step=5.0, value=40.0)
+    slab_waste = c8.number_input("ロス率(%)", min_value=0.0, max_value=30.0, step=0.5, value=5.0)
+
+    c9, c10 = st.columns(2)
+    tie_kg_per_sqm = c9.number_input("結束線係数 (kg/㎡/層)", min_value=0.0, step=0.1, value=0.4)
+    chair_per_sqm  = c10.number_input("サイコロ係数 (個/㎡/層)", min_value=0.0, step=0.5, value=4.0)
+
+    st.markdown("**立上り梁（基礎梁）**")
+    c11, c12, c13 = st.columns(3)
+    beam_bw = c11.number_input("梁幅 b (mm)",  min_value=100.0, step=10.0, value=150.0)
+    beam_d  = c12.number_input("梁成 h (mm)",  min_value=100.0, step=10.0, value=300.0)
+    beam_len_mode = c13.selectbox("梁延長", ["外周のみ(L×2+W×2)","外周＋中通り（手入力m）"], index=0)
+    extra_beam_len = 0.0
+    if beam_len_mode.endswith("手入力m"):
+        extra_beam_len = st.number_input("中通り梁 延長 (m)", min_value=0.0, step=0.5, value=0.0)
+    beam_len = 2*(L+W) + extra_beam_len
+
+    c14, c15 = st.columns(2)
+    beam_rebar_coef = c14.number_input("梁の鉄筋係数 (kg/m³)", min_value=0.0, step=5.0, value=110.0)
+    stirrup_coef    = c15.number_input("梁の結束線係数 (kg/m³)", min_value=0.0, step=0.5, value=2.0)
+
+    st.markdown("**独立フーチング**")
+    c16, c17, c18, c19 = st.columns(4)
+    footing_n = c16.number_input("フーチング個数", min_value=0, step=1, value=0)
+    footing_b = c17.number_input("幅B (mm)", min_value=300.0, step=10.0, value=650.0)
+    footing_d = c18.number_input("奥行D (mm)", min_value=300.0, step=10.0, value=650.0)
+    footing_t = c19.number_input("厚さT (mm)", min_value=150.0, step=10.0, value=150.0)
+    c20, c21 = st.columns(2)
+    footing_rebar_coef = c20.number_input("フーチング鉄筋係数 (kg/m³)", min_value=0.0, step=5.0, value=90.0)
+    footing_tie_coef   = c21.number_input("フーチング結束線係数 (kg/m³)", min_value=0.0, step=0.5, value=1.0)
+
+    st.markdown("**砕石（下地）**")
+    c22, c23 = st.columns(2)
+    subbase_t = c22.number_input("砕石厚 (mm)", min_value=0.0, step=10.0, value=100.0)
+    agg_item  = c23.selectbox("砕石品目", [
+        ("agg_crusher_run_recycle","再生クラッシャーラン"),
+        ("agg_katama_sp","カタマSP"),
+        ("agg_slag_rc30","スラグ砕石RC-30"),
+        ("agg_nj_slag","NJスラグ"),
+    ], index=0, format_func=lambda x: x[1])
+
+    st.markdown("**生コン（品番選択）**")
+    rmx_item = st.selectbox("生コン品番", [
+        ("rmx_18_18_20N","18-18-20 N"),
+        ("rmx_21_15_20N","21-15-20 N"),
+        ("rmx_24_18_20N","24-18-20 N"),
+        ("rmx_18_12_20BB","18-12-20 BB"),
+    ], index=1, format_func=lambda x: x[1])
+
+    st.markdown("**その他**")
+    c24, c25 = st.columns(2)
+    add_conc_m3 = c24.number_input("追加コンクリート量（雑・スロープ等, m³）", min_value=0.0, step=0.1, value=0.0)
+    add_note    = c25.text_input("メモ（任意）", value="")
+
+    st.markdown("**金物（任意）**")
+    c26, c27 = st.columns(2)
+    use_anchor = c26.checkbox("アンカーボルトを計上する", value=True)
+    anchor_qty = c27.number_input("アンカーボルト数量（本）", min_value=0, step=1, value=20 if use_anchor else 0)
+
+    reflect = st.radio("見積への反映", ["反映しない","上書き反映"], index=1)
+    submitted_fd = st.form_submit_button("数量を計算")
+
+# ---- 計算・表示・反映 ----
+if submitted_fd:
+    # 単価取得（0円許容）
+    def price_of(item_id: str) -> float:
+        try:
+            v = TABLE.loc[TABLE["商品ID"]==item_id, "◎ 採用単価"].values
+            return float(v[0]) if len(v) else 0.0
+        except Exception:
+            return 0.0
+
+    # 生コン体積
+    slab_m3 = A * (slab_t/1000.0)
+    beam_m3 = beam_len * (beam_bw/1000.0) * (beam_d/1000.0)
+    footing_m3 = footing_n * (footing_b/1000.0) * (footing_d/1000.0) * (footing_t/1000.0)
+    conc_total_m3 = slab_m3 + beam_m3 + footing_m3 + add_conc_m3
+
+    # 砕石体積
+    agg_m3 = A * (subbase_t/1000.0) if subbase_t > 0 else 0.0
+
+    # スラブ配筋（2方向@ピッチ、層数、外周かぶり控除、ロス率）
+    cov = slab_cover/1000.0
+    L_eff, W_eff = max(0.0, L - 2*cov), max(0.0, W - 2*cov)
+    px = py = slab_pitch/1000.0
+    n_x = int(math.floor(W_eff/px)) + 1 if px>0 else 0
+    n_y = int(math.floor(L_eff/py)) + 1 if py>0 else 0
+    total_m_slab = (n_x*L_eff + n_y*W_eff) * slab_layer_n
+    total_m_slab *= (1.0 + slab_waste/100.0)
+    slab_kgpm = REBAR_KG_PER_M.get("D10" if "D10" in slab_rebar[0] else ("D13" if "D13" in slab_rebar[0] else "D16"), 0.0)
+    slab_kg = total_m_slab * slab_kgpm
+    tie_kg = A * tie_kg_per_sqm * slab_layer_n
+    chairs = math.ceil(A * chair_per_sqm * slab_layer_n)
+
+    # 梁・フーチングの配筋（簡易：kg/m3 係数）
+    rebar_beam_kg    = beam_m3 * beam_rebar_coef
+    tie_beam_kg      = beam_m3 * stirrup_coef
+    rebar_footing_kg = footing_m3 * footing_rebar_coef
+    tie_footing_kg   = footing_m3 * footing_tie_coef
+
+    # コスト（原価）
+    conc_cost  = conc_total_m3 * price_of(rmx_item[0])
+    agg_cost   = agg_m3 * price_of(agg_item[0])
+    slab_rb_cost = total_m_slab * price_of(slab_rebar[0])
+    tie_cost      = (tie_kg + tie_beam_kg + tie_footing_kg) * price_of("tie_wire_band5_350")
+    chair_cost    = chairs * price_of("conc_sykoro_4x5x6")
+
+    # 梁・フーチングの鉄筋は同径でまとめて“重量→延長換算”せず、kgのまま→m単価品に合わせたい場合は係数をD10換算にする
+    # ここでは D13 を標準とし、kg→mはしない（※将来：棒鋼IDを別途用意）
+    beam_kg_cost    = rebar_beam_kg * (price_of("rebar_D13_SD295A") / REBAR_KG_PER_M.get("D13",1)) if REBAR_KG_PER_M.get("D13") else 0.0
+    footing_kg_cost = rebar_footing_kg * (price_of("rebar_D13_SD295A") / REBAR_KG_PER_M.get("D13",1)) if REBAR_KG_PER_M.get("D13") else 0.0
+
+    anchor_cost = anchor_qty * price_of("anchor_btn_1_2x240") if use_anchor and anchor_qty>0 else 0.0
+
+    total_cost = conc_cost + agg_cost + slab_rb_cost + beam_kg_cost + footing_kg_cost + tie_cost + chair_cost + anchor_cost
+
+    # 表示
+    st.success("数量・原価（税抜）")
+    st.write({
+        "生コン 合計(m³)": round(conc_total_m3, 3),
+        "　└スラブ(m³)": round(slab_m3,3),
+        "　└立上り梁(m³)": round(beam_m3,3),
+        "　└フーチング(m³)": round(footing_m3,3),
+        "砕石 下地(m³)": round(agg_m3,3),
+        "スラブ鉄筋 総延長(m)": round(total_m_slab,1),
+        "スラブ鉄筋 重量(kg)": round(slab_kg,1),
+        "結束線(kg)（スラブ+梁+フーチング）": round(tie_kg + tie_beam_kg + tie_footing_kg,2),
+        "サイコロ(個)": int(chairs),
+        "アンカーボルト(本)": int(anchor_qty if use_anchor else 0),
+        "原価小計(円)": round(total_cost),
+        "メモ": add_note,
+    })
+
+    # 見積カートへ上書き反映
+    if reflect == "上書き反映":
+        st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
+        st.session_state.setdefault("auto_injected", {"foundation_all": {}})
+        S  = st.session_state["pick_state"]
+        AI = st.session_state["auto_injected"]
+
+        new_items = {
+            rmx_item[0]: float(conc_total_m3),     # 生コン（m3）
+            agg_item[0]: float(agg_m3),            # 砕石（m3）
+            slab_rebar[0]: float(total_m_slab),    # スラブ筋（m）
+            "tie_wire_band5_350": float(tie_kg + tie_beam_kg + tie_footing_kg),  # kg
+            "conc_sykoro_4x5x6": float(chairs),    # 個
+        }
+        if use_anchor and anchor_qty>0:
+            new_items["anchor_btn_1_2x240"] = float(anchor_qty)
+
+        # 梁・フーチングの鉄筋（kg→D13換算のコスト参照に合わせて m 換算しない運用の場合は備考のみ）
+        # ここでは D13 を基準に“重量→延長換算”して m 商品に追加入力（実務上OK/NGは運用次第）
+        if REBAR_KG_PER_M.get("D13",0)>0:
+            add_m_from_kg = (rebar_beam_kg + rebar_footing_kg) / REBAR_KG_PER_M["D13"]
+            new_items["rebar_D13_SD295A"] = float(new_items.get("rebar_D13_SD295A", 0.0) + add_m_from_kg)
+
+        # 非累積上書き
+        prev = AI.get("foundation_all", {}) or {}
+        for iid, new_q in new_items.items():
+            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+            nxt = cur - prv + float(new_q)
+            if nxt <= 0:
+                S["qty"].pop(iid, None); S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt; S["selected"].add(iid)
+        for iid in set(prev.keys()) - set(new_items.keys()):
+            cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+            nxt = cur - prv
+            if nxt <= 0:
+                S["qty"].pop(iid, None); S["selected"].discard(iid)
+            else:
+                S["qty"][iid] = nxt; S["selected"].add(iid)
+
+        AI["foundation_all"] = dict(new_items)
+        st.success("基礎一括（生コン・配筋・砕石）を見積に上書き反映しました。")
+        st.rerun()
 
 
 
