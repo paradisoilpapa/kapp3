@@ -922,6 +922,55 @@ if submitted_slab:
         "（注）土間周囲型枠は通常片面のためセパ/Pコンは計上しません": "必要時は両面に切替してください",
     })
 
+# === 見積への上書き反映（スラブ） ===
+reflect_slab = st.radio(
+    "見積への反映（スラブ）",
+    ["反映しない", "上書き反映"],
+    index=0,
+    key="reflect_slab"
+)
+
+if reflect_slab == "上書き反映":
+    st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
+    st.session_state.setdefault("auto_injected", {"foundation_slab": {}})
+    S  = st.session_state["pick_state"]
+    AI = st.session_state["auto_injected"]
+
+    # 反映する品（IDは既存マスタ）
+    new_items = {
+        rmx_item[0]: float(slab_m3),            # 生コン m3
+        agg_item[0]: float(agg_m3),             # 砕石 m3
+        slab_rebar[0]: float(total_m_slab),     # スラブ鉄筋 m（選択径）
+        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
+        "conc_sykoro_4x5x6": float(chairs),     # サイコロ 個
+        "conpa_screw_35": float(screws),        # コンパネビス 本
+        # ★ITEMS未登録のため見積反映は保留（数量は上で表示/CSVに出ています）
+        # "form_panel_1820x910": float(sheets),  # コンパネ枚
+        # "sanki_30_square": float(sanki_m),     # サンギ m
+    }
+
+    # 非累積の上書き（差し戻し→今回分に入替え）
+    prev = AI.get("foundation_slab", {}) or {}
+    for iid, new_q in new_items.items():
+        cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+        nxt = cur - prv + float(new_q)
+        if nxt <= 0:
+            S["qty"].pop(iid, None); S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt; S["selected"].add(iid)
+    for iid in set(prev.keys()) - set(new_items.keys()):
+        cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+        nxt = cur - prv
+        if nxt <= 0:
+            S["qty"].pop(iid, None); S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt; S["selected"].add(iid)
+
+    AI["foundation_slab"] = dict(new_items)
+    st.success("土間スラブを見積に上書き反映しました。")
+    st.rerun()
+
+
     # ===（土間スラブの st.write(...) の直後に追記）===
 
 # 見積反映トグル
@@ -1081,6 +1130,57 @@ if submitted_beam:
         "サンギ30角(m)": round(sanki_m,1),
         "ピッチ": "450×450（両方向）",
     })
+
+# === 見積への上書き反映（立上り） ===
+reflect_beam = st.radio(
+    "見積への反映（立上り）",
+    ["反映しない", "上書き反映"],
+    index=0,
+    key="reflect_beam"
+)
+
+if reflect_beam == "上書き反映":
+    st.session_state.setdefault("pick_state", {"selected": set(), "qty": {}})
+    st.session_state.setdefault("auto_injected", {"foundation_beam": {}})
+    S  = st.session_state["pick_state"]
+    AI = st.session_state["auto_injected"]
+
+    # 鉄筋(kg) → D13の "m" 換算（見積の商品は m 単価のため）
+    d13_kgpm = REBAR_KG_PER_M.get("D13", 0.0)
+    rebar_d13_m = float(rebar_kg / d13_kgpm) if d13_kgpm > 0 else 0.0
+
+    new_items = {
+        rmx_item_b[0]: float(beam_m3),          # 生コン m3
+        "rebar_D13_SD295A": rebar_d13_m,        # 鉄筋 D13（m換算）
+        "tie_wire_band5_350": float(tie_kg),    # 結束線 kg
+        "conpa_screw_35": float(screws),        # コンパネビス 本
+        # ★ITEMS未登録のため見積反映は保留（数量は上で表示/CSVに出ています）
+        # "form_panel_1820x910": float(sheets),  # コンパネ枚
+        # "pcon_...": float(pcon_qty),           # Pコン
+        # "sepa_...": float(sepa_qty),           # セパ
+        # "sanki_30_square": float(sanki_m),     # サンギ m
+    }
+
+    # 非累積の上書き
+    prev = AI.get("foundation_beam", {}) or {}
+    for iid, new_q in new_items.items():
+        cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+        nxt = cur - prv + float(new_q)
+        if nxt <= 0:
+            S["qty"].pop(iid, None); S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt; S["selected"].add(iid)
+    for iid in set(prev.keys()) - set(new_items.keys()):
+        cur = float(S["qty"].get(iid, 0.0)); prv = float(prev.get(iid, 0.0))
+        nxt = cur - prv
+        if nxt <= 0:
+            S["qty"].pop(iid, None); S["selected"].discard(iid)
+        else:
+            S["qty"][iid] = nxt; S["selected"].add(iid)
+
+    AI["foundation_beam"] = dict(new_items)
+    st.success("立上り梁を見積に上書き反映しました。")
+    st.rerun()
 
     # ===（立上り梁の st.write(...) の直後に追記）===
 
