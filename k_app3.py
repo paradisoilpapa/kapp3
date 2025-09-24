@@ -1017,6 +1017,14 @@ if reflect_slab == "上書き反映":
     st.success("土間スラブを見積に上書き反映しました。")
     st.rerun()
 
+    # === 見積への上書き反映（スラブ） ===
+reflect_slab = st.radio(
+    "見積への反映（スラブ）",
+    ["反映しない", "上書き反映"],
+    index=0,
+    key="reflect_slab_v2"   # ← ユニークなキー名に変更
+)
+
 
     # CSV
     import pandas as pd
@@ -1030,13 +1038,7 @@ if reflect_slab == "上書き反映":
         "型枠面": form_side
     }])
 
-# === 見積への上書き反映（スラブ） ===
-reflect_slab = st.radio(
-    "見積への反映（スラブ）",
-    ["反映しない", "上書き反映"],
-    index=0,
-    key="reflect_slab_v2"   # ← ユニークなキー名に変更
-)
+
 
     
     st.download_button("↓ 土間スラブ 明細CSV",
@@ -1238,6 +1240,14 @@ if reflect_beam == "上書き反映":
     st.success("立上り梁を見積に上書き反映しました。")
     st.rerun()
 
+    # === 見積への上書き反映（立上り） ===
+reflect_beam = st.radio(
+    "見積への反映（立上り）",
+    ["反映しない", "上書き反映"],
+    index=0,
+    key="reflect_beam_v2"   # ← ユニークなキー名に変更
+)
+
 
     # CSV
     import pandas as pd
@@ -1256,13 +1266,7 @@ if reflect_beam == "上書き反映":
         data=df_beam.to_csv(index=False).encode("utf-8-sig"),
         file_name="beam_uprise.csv", mime="text/csv")
 
-# === 見積への上書き反映（立上り） ===
-reflect_beam = st.radio(
-    "見積への反映（立上り）",
-    ["反映しない", "上書き反映"],
-    index=0,
-    key="reflect_beam_v2"   # ← ユニークなキー名に変更
-)
+
 
 
 # -------------------------------------
