@@ -1026,7 +1026,7 @@ reflect_slab = st.radio(
 )
 
 
-   import pandas as pd
+import pandas as pd   # ← 左端に置く
 
 df_slab = pd.DataFrame([{
     "L(m)": L,
