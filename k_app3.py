@@ -1048,12 +1048,12 @@ df_slab = pd.DataFrame([{
 }])
 
 
-
-    
-    st.download_button("↓ 土間スラブ 明細CSV",
-        data=df_slab.to_csv(index=False).encode("utf-8-sig"),
-        file_name="slab_bedacon.csv", mime="text/csv")
-
+st.download_button(
+    "↓ 土間スラブ 明細CSV",
+    data=df_slab.to_csv(index=False).encode("utf-8-sig"),
+    file_name="slab_bedacon.csv",
+    mime="text/csv"
+)
 
 # -------------------------------------
 # 基礎：立上り梁フォーム（生コン・配筋係数・型枠）
