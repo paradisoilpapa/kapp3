@@ -1026,17 +1026,26 @@ reflect_slab = st.radio(
 )
 
 
-    # CSV
-    import pandas as pd
-        df_slab = pd.DataFrame([{
-        "L(m)": L, "W(m)": W, "面積(㎡)": round(A,2), "周長(m)": round(P,2),
-        "厚み(mm)": t_mm, "生コン(m³)": round(slab_m3,3),
-        "鉄筋延長(m)": round(total_m_slab,1), "鉄筋重量(kg)": round(slab_kg,1),
-        "結束線(kg)": round(tie_kg,2), "サイコロ(個)": int(chairs),
-        "砕石(m³)": round(agg_m3,3),
-        "型枠高さ(mm)": H_use, "パネル(枚)": sheets, "ビス(本)": screws, "サンギ(m)": round(sanki_m,1),
-        "型枠面": form_side
-    }])
+   import pandas as pd
+
+df_slab = pd.DataFrame([{
+    "L(m)": L,
+    "W(m)": W,
+    "面積(㎡)": round(A, 2),
+    "周長(m)": round(P, 2),
+    "厚み(mm)": t_mm,
+    "生コン(m³)": round(slab_m3, 3),
+    "鉄筋延長(m)": round(total_m_slab, 1),
+    "鉄筋重量(kg)": round(slab_kg, 1),
+    "結束線(kg)": round(tie_kg, 2),
+    "サイコロ(個)": int(chairs),
+    "砕石(m³)": round(agg_m3, 3),
+    "型枠高さ(mm)": H_use,
+    "パネル(枚)": sheets,
+    "ビス(本)": screws,
+    "サンギ(m)": round(sanki_m, 1),
+    "型枠面": form_side
+}])
 
 
 
