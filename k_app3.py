@@ -1028,7 +1028,7 @@ reflect_slab = st.radio(
 
     # CSV
     import pandas as pd
-    df_slab = pd.DataFrame([{
+        df_slab = pd.DataFrame([{
         "L(m)": L, "W(m)": W, "面積(㎡)": round(A,2), "周長(m)": round(P,2),
         "厚み(mm)": t_mm, "生コン(m³)": round(slab_m3,3),
         "鉄筋延長(m)": round(total_m_slab,1), "鉄筋重量(kg)": round(slab_kg,1),
