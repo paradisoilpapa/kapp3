@@ -1258,25 +1258,30 @@ reflect_beam = st.radio(
 )
 
 
-    # CSV
-    import pandas as pd
-    df_beam = pd.DataFrame([{
-        "梁延長(m)": round(beam_len,2),
-        "幅b(mm)": b, "成h(mm)": h,
-        "生コン(m³)": round(beam_m3,3),
-        "鉄筋(kg)": round(rebar_kg,1),
-        "結束線(kg)": round(tie_kg,1),
-        "型枠高さ(mm)": H_use,
-        "パネル(枚)": sheets, "ビス(本)": screws,
-        "セパ(本)": sepa_qty, "Pコン(個)": pcon_qty,
-        "サンギ(m)": round(sanki_m,1)
-    }])
-    st.download_button("↓ 立上り梁 明細CSV",
-        data=df_beam.to_csv(index=False).encode("utf-8-sig"),
-        file_name="beam_uprise.csv", mime="text/csv")
+# CSV
+import pandas as pd
 
+df_beam = pd.DataFrame([{
+    "梁延長(m)": round(beam_len, 2),
+    "幅b(mm)": b,
+    "成h(mm)": h,
+    "生コン(m³)": round(beam_m3, 3),
+    "鉄筋(kg)": round(rebar_kg, 1),
+    "結束線(kg)": round(tie_kg, 1),
+    "型枠高さ(mm)": H_use,
+    "パネル(枚)": sheets,
+    "ビス(本)": screws,
+    "セパ(本)": sepa_qty,
+    "Pコン(個)": pcon_qty,
+    "サンギ(m)": round(sanki_m, 1)
+}])
 
-
+st.download_button(
+    "↓ 立上り梁 明細CSV",
+    data=df_beam.to_csv(index=False).encode("utf-8-sig"),
+    file_name="beam_uprise.csv",
+    mime="text/csv"
+)
 
 # -------------------------------------
 # 履歴（任意表示）
